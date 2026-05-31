@@ -24,10 +24,11 @@ import json
 import logging
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+from dsc._paths import rulepacks_expanded_dir
 from dsc.engine import (
     OpenGrepError,
     OpenGrepRunner,
@@ -51,6 +52,7 @@ from dsc.scanner.quality import (
     load_suppressions,
     policy_for_profile,
 )
+from dsc.scanner.reachability import enrich_reachability
 from dsc.version import __version__
 
 logger = logging.getLogger(__name__)
@@ -60,7 +62,6 @@ logger = logging.getLogger(__name__)
 # a cold rebuild.
 CACHE_VERSION = 3
 
-from dsc._paths import rulepacks_expanded_dir
 DEFAULT_RULEPACK = rulepacks_expanded_dir()
 
 # Above this number of files we hand OpenGrep the workspace directory plus
@@ -338,6 +339,11 @@ class ScanEngine:
             min_confidence=min_confidence,
             include_suppressed=include_suppressed,
         )
+        findings = self._enrich_reachability(
+            findings,
+            workspace_root=workspace_root or str(path.parent),
+            file_contents={str(path): file.content} if file.content else None,
+        )
         return findings, errors
 
     def scan(
@@ -488,6 +494,12 @@ class ScanEngine:
         )
         _phase(f"quality-end findings={len(all_findings)}")
 
+        all_findings = self._enrich_reachability(
+            all_findings,
+            workspace_root=str(workspace_root),
+        )
+        _phase("reachability-end")
+
         active_cwes = sorted(
             {r.cwe for r in handle.rulepack.rules if r.cwe}
         )
@@ -578,6 +590,19 @@ class ScanEngine:
             target_root=target_root,
             policy=policy,
             suppressions=self._suppressions,
+        )
+
+    @staticmethod
+    def _enrich_reachability(
+        findings: list[Finding],
+        *,
+        workspace_root: str | None,
+        file_contents: dict[str, str] | None = None,
+    ) -> list[Finding]:
+        return enrich_reachability(
+            findings,
+            workspace_root=workspace_root,
+            file_contents=file_contents,
         )
 
 

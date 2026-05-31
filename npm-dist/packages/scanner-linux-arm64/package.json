@@ -1,6 +1,6 @@
 {
   "name": "@devseccode/scanner-linux-arm64",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Prebuilt public dsc CLI binary for linux-arm64 (glibc). Installed automatically by @devseccode/scanner on ARM64 Linux.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",

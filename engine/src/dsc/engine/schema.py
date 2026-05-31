@@ -79,6 +79,13 @@ def validate_rule_dict(rule: dict[str, Any], *, source: str = "<rule>") -> None:
     if tier not in _VALID_TIERS:
         fail(f"rule.metadata.deva.precision_tier must be one of {sorted(_VALID_TIERS)}")
 
+    confidence = deva.get("confidence")
+    if confidence is not None:
+        if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+            fail("rule.metadata.deva.confidence must be a number between 0.0 and 1.0")
+        if confidence < 0.0 or confidence > 1.0:
+            fail("rule.metadata.deva.confidence must be between 0.0 and 1.0")
+
     realtime_eligible = deva.get("realtime_eligible")
     if realtime_eligible is not None and not isinstance(realtime_eligible, bool):
         fail("rule.metadata.deva.realtime_eligible must be a boolean")
@@ -175,7 +182,17 @@ def validate_rule_dict(rule: dict[str, Any], *, source: str = "<rule>") -> None:
             fail("taint-mode rule must define pattern-sinks")
 
     # Realtime eligibility cross-check (Section 3.6)
-    if realtime_eligible is True:
+    effective_realtime_eligible = (
+        realtime_eligible
+        if realtime_eligible is not None
+        else tier == "A" and mode == "search" and not pp and not fs and not ls
+    )
+    if effective_realtime_eligible is True:
+        if confidence is not None and confidence < 0.90:
+            fail(
+                "realtime_eligible: true requires metadata.deva.confidence "
+                ">= 0.90 so inline findings survive REALTIME_STRICT gating"
+            )
         if mode != "search":
             fail(
                 "realtime_eligible: true requires mode: search "

@@ -38,6 +38,7 @@ class LoadedRule:
     message: str
     mode: str
     precision_tier: str
+    confidence: float
     realtime_eligible: bool
     post_processor: str | None
     post_processor_args: dict[str, Any]
@@ -63,6 +64,12 @@ _SARIF_SEVERITY = {
     "ERROR": Severity.HIGH,
     "WARNING": Severity.MEDIUM,
     "INFO": Severity.LOW,
+}
+
+_DEFAULT_CONFIDENCE_BY_TIER = {
+    "A": 0.90,
+    "B": 0.75,
+    "C": 0.55,
 }
 
 
@@ -164,10 +171,23 @@ class RulepackLoader:
                 )
 
         tier = deva.get("precision_tier", "B")
-        realtime_default = (tier == "A")
+        realtime_default = (
+            tier == "A"
+            and rule_dict.get("mode", "search") == "search"
+            and not post_processor
+            and not rule_dict.get("framework_sources")
+            and not rule_dict.get("language_sources")
+        )
         realtime_eligible = bool(
             deva.get("realtime_eligible", realtime_default)
         )
+        confidence_raw = deva.get("confidence")
+        if isinstance(confidence_raw, (int, float)) and not isinstance(confidence_raw, bool):
+            confidence = float(confidence_raw)
+        else:
+            confidence = _DEFAULT_CONFIDENCE_BY_TIER.get(tier, 0.75)
+            if realtime_eligible:
+                confidence = max(confidence, 0.95)
         # The schema validator already enforced the cross-checks for
         # realtime_eligible: true; here we just trust the boolean.
 
@@ -196,6 +216,7 @@ class RulepackLoader:
             message=rule_dict.get("message", ""),
             mode=rule_dict.get("mode", "search"),
             precision_tier=tier,
+            confidence=confidence,
             realtime_eligible=realtime_eligible,
             post_processor=post_processor,
             post_processor_args=dict(deva.get("post_processor_args") or {}),

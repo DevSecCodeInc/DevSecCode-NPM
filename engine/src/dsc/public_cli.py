@@ -347,7 +347,7 @@ fail_on: high
 
 
 def cmd_list_rules(_args: argparse.Namespace) -> int:
-    rows: list[list[str]] = [["ID", "CWE", "Severity", "Languages", "Tier"]]
+    rows: list[list[str]] = [["ID", "CWE", "Severity", "Languages", "Tier", "Confidence"]]
     for rule in sorted(_load_rulepack(), key=lambda r: r.id):
         rows.append(
             [
@@ -356,6 +356,7 @@ def cmd_list_rules(_args: argparse.Namespace) -> int:
                 rule.severity.name,
                 ",".join(rule.languages),
                 rule.precision_tier,
+                f"{rule.confidence:.2f}",
             ]
         )
     sys.stdout.write(_print_table(rows))
@@ -376,6 +377,7 @@ def cmd_explain(args: argparse.Namespace) -> int:
     sys.stdout.write(f"{rule.id} ({rule.cwe})\n")
     sys.stdout.write(f"Default severity: {rule.severity.name}\n")
     sys.stdout.write(f"Precision tier: {rule.precision_tier}\n")
+    sys.stdout.write(f"Confidence: {rule.confidence:.2f}\n")
     if rule.languages:
         sys.stdout.write(f"Languages: {', '.join(rule.languages)}\n")
     sys.stdout.write("\n")
@@ -417,9 +419,7 @@ def cmd_hunt(args: argparse.Namespace) -> int:
         render_xp_gain,
     )
     from dsc.gamification.characters import get_character
-    from dsc.gamification.imports import build_graph
     from dsc.gamification.profile import DIFFICULTY_FAIL_ON, load_profile, record_hunt, save_profile
-    from dsc.gamification.triage import load_triage
 
     profile = load_profile()
     char = get_character(profile.hunter_class)
@@ -674,7 +674,6 @@ def cmd_map(args: argparse.Namespace) -> int:
 
     if explore._is_interactive():
         from dsc.gamification import tui
-        from dsc.gamification.imports import walk_target_files
         files_with_findings = sorted({f.file_path for f in result.findings})
         extra_files = _pick_extra_files(targets, findings=files_with_findings, cap=80)
         all_nodes = sorted(set(files_with_findings) | set(extra_files))

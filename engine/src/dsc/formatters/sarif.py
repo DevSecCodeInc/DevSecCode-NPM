@@ -27,6 +27,20 @@ def _cwe_tag(finding) -> str | None:
 
 def _finding_properties(f) -> dict:
     props: dict = {"cwe": f.cwe, "severity": f.severity.name}
+    if f.metadata:
+        for key in (
+            "precision_tier",
+            "confidence",
+            "realtime_eligible",
+            "advisory",
+            "suppressed",
+        ):
+            if key in f.metadata:
+                props[key] = f.metadata[key]
+    if getattr(f, "reachability", "unknown") != "unknown":
+        props["reachability"] = f.reachability
+    if getattr(f, "entry_points", None):
+        props["entry_points"] = list(f.entry_points)
     compliance_controls = f.metadata.get("compliance_controls") if f.metadata else None
     if compliance_controls:
         props["compliance_controls"] = compliance_controls
@@ -107,4 +121,3 @@ def format_sarif(result: ScanResult) -> str:
         ],
     }
     return json.dumps(sarif, indent=2, sort_keys=True) + "\n"
-

@@ -7,10 +7,9 @@ import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path, PurePosixPath
-from typing import Any
 
 from dsc.config import load_config
-from dsc.scanner.models import DetectorMetadata, Finding, Severity
+from dsc.scanner.models import DetectorMetadata, Finding
 
 _log = logging.getLogger(__name__)
 
@@ -480,6 +479,11 @@ def _rebuild_finding(f: Finding, md: dict) -> Finding:
 		fix_suggestion=f.fix_suggestion,
 		snippet=f.snippet,
 		metadata=md,
+		triage_label=f.triage_label,
+		triage_confidence=f.triage_confidence,
+		triage_reasoning=f.triage_reasoning,
+		reachability=f.reachability,
+		entry_points=list(f.entry_points),
 	)
 
 
@@ -633,12 +637,10 @@ def apply_quality_layer(
 				confidence = 0.0
 
 		# Check suppression
-		is_suppressed = False
 		entry = suppressions.get(fp)
 		if entry is not None and _is_suppression_active(entry):
 			if not policy.include_suppressed:
 				continue
-			is_suppressed = True
 			md = dict(md)
 			md["suppressed"] = True
 			md["suppression_reason"] = entry.reason

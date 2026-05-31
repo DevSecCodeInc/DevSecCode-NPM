@@ -1,6 +1,6 @@
 {
   "name": "@devseccode/scanner-win32-x64",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Prebuilt public dsc CLI binary for win32-x64. Installed automatically by @devseccode/scanner on 64-bit Windows.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",

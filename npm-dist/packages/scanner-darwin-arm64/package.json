@@ -1,6 +1,6 @@
 {
   "name": "@devseccode/scanner-darwin-arm64",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Prebuilt public dsc CLI binary for darwin-arm64. Installed automatically by @devseccode/scanner on Apple Silicon Macs.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",

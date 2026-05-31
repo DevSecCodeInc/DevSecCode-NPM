@@ -43,6 +43,21 @@ class TriageLabel:
     ALL = (DEFINITE, LIKELY, PROBABLY_FP, UNTRIAGED)
 
 
+class ReachabilityLabel:
+    """Exploitability reachability classification.
+
+    Defaults to UNKNOWN until a reachability analyzer can prove whether a
+    finding is reachable from an entry point. Stored as plain strings so
+    findings remain JSON / SARIF friendly.
+    """
+
+    REACHABLE = "reachable"
+    UNREACHABLE = "unreachable"
+    UNKNOWN = "unknown"
+
+    ALL = (REACHABLE, UNREACHABLE, UNKNOWN)
+
+
 @dataclass(frozen=True, slots=True)
 class Finding:
     rule_id: str
@@ -61,6 +76,8 @@ class Finding:
     triage_label: str = "untriaged"
     triage_confidence: float = 0.0
     triage_reasoning: str | None = None
+    reachability: str = "unknown"
+    entry_points: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -78,6 +95,8 @@ class Finding:
             "triage_label": self.triage_label,
             "triage_confidence": self.triage_confidence,
             "triage_reasoning": self.triage_reasoning,
+            "reachability": self.reachability,
+            "entry_points": list(self.entry_points),
         }
 
     @classmethod
@@ -97,6 +116,8 @@ class Finding:
             triage_label=str(data.get("triage_label") or "untriaged"),
             triage_confidence=float(data.get("triage_confidence") or 0.0),
             triage_reasoning=data.get("triage_reasoning"),
+            reachability=str(data.get("reachability") or "unknown"),
+            entry_points=[str(e) for e in (data.get("entry_points") or [])],
         )
 
 
@@ -121,6 +142,12 @@ class ScanResult:
             "errors": list(self.errors),
             "detector_timings_ms": dict(self.detector_timings_ms),
             "active_detector_cwes": list(self.active_detector_cwes),
+            "counts_by_severity": {
+                severity.name: count for severity, count in self.counts_by_severity().items()
+            },
+            "counts_by_precision_tier": self.counts_by_precision_tier(),
+            "advisory_count": self.advisory_count(),
+            "suppressed_count": self.suppressed_count(),
         }
 
     @classmethod
@@ -148,6 +175,20 @@ class ScanResult:
         for f in self.findings:
             counts[f.severity] = counts.get(f.severity, 0) + 1
         return counts
+
+    def counts_by_precision_tier(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for finding in self.findings:
+            tier = finding.metadata.get("precision_tier")
+            key = str(tier) if tier else "unknown"
+            counts[key] = counts.get(key, 0) + 1
+        return dict(sorted(counts.items()))
+
+    def advisory_count(self) -> int:
+        return sum(1 for finding in self.findings if finding.metadata.get("advisory"))
+
+    def suppressed_count(self) -> int:
+        return sum(1 for finding in self.findings if finding.metadata.get("suppressed"))
 
 
 @dataclass(frozen=True, slots=True)

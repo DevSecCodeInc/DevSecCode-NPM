@@ -8,7 +8,6 @@ a post-processor is invisible downstream.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from dsc.postprocessors.base import PostProcessorRegistry, SarifMatch, ScanContext
@@ -28,9 +27,7 @@ class ResultMapper:
     ) -> None:
         self._by_id = rulepack.by_id()
         if post_processors is None:
-            from dsc.postprocessors import REGISTRY as default_registry
-
-            post_processors = default_registry
+            post_processors = PostProcessorRegistry()
         self._registry = post_processors
 
     def map_results(
@@ -140,6 +137,7 @@ class ResultMapper:
             snippet=match.raw_lines or None,
             metadata={
                 "precision_tier": rule.precision_tier,
+                "confidence": rule.confidence,
                 "realtime_eligible": rule.realtime_eligible,
                 **({"deva_compliance": rule.metadata.get("deva", {}).get("compliance")}
                    if rule.metadata.get("deva", {}).get("compliance") else {}),

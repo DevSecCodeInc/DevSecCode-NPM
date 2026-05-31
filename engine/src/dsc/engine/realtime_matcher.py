@@ -29,7 +29,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from dsc.scanner.models import Finding
 
@@ -188,14 +187,7 @@ def _make_finding(
             "precision_tier": rule.precision_tier,
             "realtime_eligible": True,
             "engine": "realtime",
-            # Layer-1 realtime hits are token-gated regex / literal
-            # matches -- they are ground-truth deterministic, not
-            # taint-flow approximations. Set a high confidence so the
-            # REALTIME_STRICT policy (min_confidence=0.90) doesn't
-            # silently drop them as low-confidence noise. Without this
-            # the matcher correctly produces a Finding object but the
-            # quality gate filters it out before the IDE ever sees it.
-            "confidence": 0.95,
+            "confidence": rule.confidence,
             "family": "realtime",
         },
     )
