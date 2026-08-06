@@ -17,9 +17,9 @@
 npx @devseccode/scanner hunt .
 ```
 
-No install. No signup. No config file. The scanner downloads a prebuilt
-~18 MB binary for your platform and runs locally — your source code never
-leaves the machine.
+No signup and no separate Core install. npm installs the parent CLI package
+plus the matching platform public/starter Core artifact package automatically;
+your source code stays on your machine.
 
 ## What it does
 
@@ -33,9 +33,9 @@ leaves the machine.
 - **Standard outputs** — SARIF (for GitHub code scanning), JUnit (for
   CI test runners), JSON (for downstream tooling), and a colorized
   terminal report.
-- **Zero runtime dependencies** — a single PyInstaller binary per
-  platform. No Python install, no `node_modules` for the scanner
-  itself, no internet connection at runtime.
+- **Single npm install** — the parent package owns the Node CLI and local UX;
+  the matching optional platform package carries the DevSecCode public/starter
+  Core backend artifact. No Python install or separate Core checkout is required.
 
 ## Install
 
@@ -96,24 +96,24 @@ place CodeQL findings appear.
 
 | Platform                              | Status                                  |
 | ------------------------------------- | --------------------------------------- |
-| macOS Apple Silicon (`darwin-arm64`)  | Built, code-signed, and notarized       |
-| Linux x64                             | Built (glibc; not Alpine / musl)        |
-| Linux arm64                           | Built (glibc; not Alpine / musl)        |
-| Windows x64                           | Built                                   |
+| macOS Apple Silicon (`darwin-arm64`)  | Public/starter Core artifact package   |
+| Linux x64                             | Public/starter Core artifact package (glibc; not Alpine / musl) |
+| Linux arm64                           | Public/starter Core artifact package (glibc; not Alpine / musl) |
+| Windows x64                           | Public/starter Core artifact package   |
 | Intel Mac (`darwin-x64`)              | Not in this release — GitHub retired the macos-13 runner pool |
 
 For Alpine / musl Linux, run from a Debian or Ubuntu sidecar in CI.
 
 ## Privacy
 
-The scanner is **fully local**. There is no telemetry, no analytics, no
-code upload, and no network call after `npm install` completes. You can
-verify with `tcpdump`, Little Snitch, or a sandboxed firewall.
+The scanner is **fully local**. There is no telemetry, no analytics, and no
+code upload. The CLI starts or reuses the packaged local public/starter Core
+backend and talks to it through authenticated loopback `/v1/*` routes.
 
 ## The DevSecCode IDE
 
-The npm scanner is intentionally focused — it ships a curated rule
-subset and basic outputs as a free, frictionless entry point. The
+The npm scanner is intentionally focused — it ships only a curated public
+starter rule subset and basic outputs as a free, frictionless entry point. The
 full **DevSecCode IDE** keeps the complete rule library, compliance
 mapping (NIST 800-53, HIPAA, FedRAMP, SOC 2, ISO 27001, PCI DSS, and
 more), SBOM and dependency CVE enrichment, audit-grade signed
@@ -125,14 +125,11 @@ scanning, and guided remediation workflows.
 ## Project layout
 
 ```
-engine/                Python source compiled to a single binary by PyInstaller
-  public_rulepacks/    Curated OpenGrep .yml rules bundled into the binary
-  vendor/opengrep/     OpenGrep binary fetched at build time
-  dsc-cli.spec         PyInstaller spec consumed by build-binary.sh
-npm-dist/              npm packaging — parent shim + per-platform packages
-  packages/scanner/    Parent package (@devseccode/scanner)
-  packages/scanner-*/  Per-platform binary packages
-  scripts/             Build, sign, assemble, publish helpers
+engine/                Legacy scanner implementation retained during migration
+npm-dist/              npm packaging for the Core-backed CLI
+  packages/scanner/    Parent Node CLI/UX package (@devseccode/scanner)
+  packages/scanner-*/  Per-platform public/starter Core artifact packages
+  scripts/             Public/starter Core artifact assembly and publish helpers
 .github/workflows/     Tag-driven release pipeline (release-npm.yml)
 resources/sample-vulns/ Tiny fixtures the test scripts scan as a smoke check
 ```

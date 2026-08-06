@@ -1,31 +1,27 @@
 #!/usr/bin/env bash
-# Stamp the canonical version from engine/src/dsc/version.py into the
-# parent @devseccode/scanner package.json, including every optionalDependency
-# pin so the parent always references the platform packages at the exact
-# same version we're publishing.
-#
-# Called by the GHA `publish` job before `npm publish` runs in
-# packages/scanner/.
+# Pin every platform optionalDependency to the parent npm wrapper version.
+# The npm wrapper version is independent from the Core engine version; Core
+# engine/contract versions are reported at runtime from /v1/meta.
 
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-NPM_DIST="$ROOT/npm-dist"
-VERSION="$(bash "$NPM_DIST/scripts/version.sh")"
+PARENT_PACKAGE="$ROOT/npm-dist/packages/scanner/package.json"
 
-python3 - "$NPM_DIST/packages/scanner/package.json" "$VERSION" <<'PY'
-import json, sys
-path, version = sys.argv[1], sys.argv[2]
-with open(path, "r", encoding="utf-8") as f:
-    data = json.load(f)
-data["version"] = version
-deps = data.get("optionalDependencies") or {}
-for k in list(deps):
-    deps[k] = version
-data["optionalDependencies"] = deps
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
-    f.write("\n")
-PY
-
-echo "==> Stamped parent package.json with version=$VERSION"
+node - "$PARENT_PACKAGE" <<'JS'
+const fs = require("node:fs");
+const path = process.argv[2];
+const data = JSON.parse(fs.readFileSync(path, "utf8"));
+const version = data.version;
+if (!version) {
+  console.error("parent package.json is missing version");
+  process.exit(1);
+}
+const deps = data.optionalDependencies || {};
+for (const name of Object.keys(deps)) {
+  deps[name] = version;
+}
+data.optionalDependencies = deps;
+fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+console.log(`==> Stamped optionalDependencies with parent version=${version}`);
+JS

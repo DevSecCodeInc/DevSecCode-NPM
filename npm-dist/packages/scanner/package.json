@@ -1,6 +1,6 @@
 {
   "name": "@devseccode/scanner",
-  "version": "0.4.5",
+  "version": "0.5.0-beta.1",
   "description": "Gamified local security CLI for hunting common code vulnerabilities from npm.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
@@ -32,17 +32,25 @@
   },
   "files": [
     "bin/",
+    "lib/",
+    "trust/",
     "README.md",
     "LICENSE"
   ],
   "engines": {
     "node": ">=18"
   },
+  "dependencies": {
+    "@devseccode/core-launcher": "0.1.1"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
   "optionalDependencies": {
-    "@devseccode/scanner-darwin-arm64": "0.4.5",
-    "@devseccode/scanner-linux-x64": "0.4.5",
-    "@devseccode/scanner-linux-arm64": "0.4.5",
-    "@devseccode/scanner-win32-x64": "0.4.5"
+    "@devseccode/scanner-darwin-arm64": "0.5.0-beta.1",
+    "@devseccode/scanner-linux-x64": "0.5.0-beta.1",
+    "@devseccode/scanner-linux-arm64": "0.5.0-beta.1",
+    "@devseccode/scanner-win32-x64": "0.5.0-beta.1"
   },
   "publishConfig": {
     "access": "public"

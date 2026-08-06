@@ -17,6 +17,12 @@ htmlcov/
 engine/build/
 engine/dist/
 npm-dist/build/
+npm-dist/_core-artifacts/
+
+# Core release payloads are assembled in CI and must never enter Git history.
+# Keep only empty-directory placeholders in source control.
+npm-dist/packages/scanner-*/artifacts/*
+!npm-dist/packages/scanner-*/artifacts/.gitkeep
 
 # ---- Node / npm ----
 node_modules/

@@ -1,0 +1,52 @@
+name: NPM CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify source tree and package versions
+        shell: bash
+        run: |
+          bash -n npm-dist/scripts/*.sh
+          python3 -m py_compile npm-dist/scripts/extract-core-artifact-bundle.py
+          if git ls-files 'npm-dist/packages/scanner-*/artifacts/*' | grep -v '/.gitkeep$' | grep -q .; then
+            echo "::error::Generated Core payloads must not be committed."
+            exit 1
+          fi
+          node - <<'JS'
+          const fs = require("node:fs");
+          const targets = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
+          const parent = JSON.parse(fs.readFileSync("npm-dist/packages/scanner/package.json", "utf8"));
+          for (const target of targets) {
+            const name = `@devseccode/scanner-${target}`;
+            const platformPackage = JSON.parse(
+              fs.readFileSync(`npm-dist/packages/scanner-${target}/package.json`, "utf8"),
+            );
+            if (platformPackage.version !== parent.version || parent.optionalDependencies[name] !== parent.version) {
+              throw new Error(`${name} is not pinned to parent version ${parent.version}`);
+            }
+          }
+          JS
+
+      - name: Run NPM unit and package guardrail tests
+        run: node --test npm-dist/packages/scanner/test/*.test.js
+
+      - name: Verify parent package contents
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/npm-pack"
+          npm pack npm-dist/packages/scanner --pack-destination "$RUNNER_TEMP/npm-pack" --dry-run

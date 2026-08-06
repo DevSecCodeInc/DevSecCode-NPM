@@ -21,7 +21,7 @@
 # Usage:
 #   bash npm-dist/scripts/test-with-verdaccio.sh
 #
-# Requires: node 18+, npm 9+, python3.10+ (for the binary build).
+# Requires: node 18+, npm 9+, and DSC_CORE_ARTIFACT_DIR pointing at public/starter Core artifacts.
 # Will install verdaccio + verdaccio-auth-memory via `npx` on first run.
 
 set -euo pipefail
@@ -32,40 +32,24 @@ NPM_DIST="$ROOT/npm-dist"
 infer_target() {
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64)         echo "darwin-arm64" ;;
-    Darwin-x86_64)        echo "darwin-x64" ;;
     Linux-x86_64)         echo "linux-x64" ;;
     Linux-aarch64|Linux-arm64) echo "linux-arm64" ;;
     *) echo "unsupported host" >&2; exit 1 ;;
   esac
 }
 TARGET="$(infer_target)"
+CORE_ARTIFACT_DIR="${DSC_CORE_ARTIFACT_DIR:-}"
+if [[ -z "$CORE_ARTIFACT_DIR" ]]; then
+  echo "test-with-verdaccio: set DSC_CORE_ARTIFACT_DIR to Core dist/artifacts" >&2
+  exit 2
+fi
 echo "==> Host target: $TARGET"
 
 #
-# Phase 1: build the binary + assemble the platform package.
-# Skip if already present (saves the 1-2 min PyInstaller cost on reruns).
+# Phase 1: assemble the platform package from public/starter Core artifacts.
 #
-BIN_NAME="dsc"
-[[ "$TARGET" == win32-* ]] && BIN_NAME="dsc.exe"
-if [[ ! -f "$NPM_DIST/packages/scanner-$TARGET/bin/$BIN_NAME" ]]; then
-  echo "==> Binary missing -- running test-local-install.sh prefix to build it"
-  # Reuse the venv-and-build prefix from test-local-install.sh by calling
-  # the underlying scripts directly so we don't kick off a redundant install.
-  VENV="$ROOT/engine/.venv"
-  if [[ ! -d "$VENV" ]]; then python3 -m venv "$VENV"; fi
-  # shellcheck disable=SC1091
-  source "$VENV/bin/activate"
-  if ! python -c "import PyInstaller" >/dev/null 2>&1; then
-    # --no-cache-dir bypasses pip's HTTP cache (avoids "deserialization
-    # failed" spam). Skip [dev] extras: PyInstaller doesn't need them.
-    echo "==> Installing engine + PyInstaller into venv (no cache, runtime deps only)"
-    pip install --no-cache-dir --upgrade pip
-    pip install --no-cache-dir -e "$ROOT/engine"
-    pip install --no-cache-dir pyinstaller
-  fi
-  PYTHON="$VENV/bin/python" bash "$NPM_DIST/scripts/build-binary.sh" "$TARGET"
-  bash "$NPM_DIST/scripts/assemble-platform-pkg.sh" "$TARGET"
-fi
+echo "==> Assembling scanner-$TARGET from $CORE_ARTIFACT_DIR"
+bash "$NPM_DIST/scripts/assemble-platform-pkg.sh" "$TARGET" "$CORE_ARTIFACT_DIR"
 
 #
 # Phase 2: stamp parent version so optionalDependency pins match what we
@@ -80,14 +64,17 @@ TMP="$(mktemp -d)"
 VERDACCIO_STORAGE="$TMP/verdaccio-storage"
 VERDACCIO_CONFIG="$TMP/verdaccio-config.yaml"
 VERDACCIO_LOG="$TMP/verdaccio.log"
-mkdir -p "$VERDACCIO_STORAGE"
+export HOME="$TMP/home"
+export DEVSECCODE_HOME="$TMP/devseccode-home"
+export XDG_CACHE_HOME="$TMP/cache"
+export npm_config_cache="$TMP/npm-cache"
+mkdir -p "$VERDACCIO_STORAGE" "$HOME" "$DEVSECCODE_HOME" "$XDG_CACHE_HOME" "$npm_config_cache"
 
 cat >"$VERDACCIO_CONFIG" <<YAML
 storage: $VERDACCIO_STORAGE
-# Default body-size limit is 10mb; the PyInstaller-built dsc binary is
-# ~18mb per platform, so we need headroom. 100mb covers any realistic
-# growth and matches what most internal/enterprise Verdaccio deploys use.
-max_body_size: 100mb
+# Core backend artifacts can be tens of MB, so use enough headroom for the
+# platform package archive.
+max_body_size: 250mb
 auth:
   htpasswd:
     file: $TMP/htpasswd
@@ -111,6 +98,36 @@ listen: 127.0.0.1:4873
 YAML
 
 cleanup() {
+  local pid=""
+  while IFS= read -r pid; do
+    if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+      kill "$pid" 2>/dev/null || true
+      for _ in {1..50}; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+    fi
+  done < <(node - "$DEVSECCODE_HOME" <<'JS'
+const fs = require("node:fs");
+const path = require("node:path");
+const pending = [process.argv[2]];
+while (pending.length) {
+  const current = pending.pop();
+  let entries = [];
+  try { entries = fs.readdirSync(current, { withFileTypes: true }); } catch (_) { continue; }
+  for (const entry of entries) {
+    const file = path.join(current, entry.name);
+    if (entry.isDirectory()) pending.push(file);
+    else if (entry.name.endsWith(".json")) {
+      try {
+        const value = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (Number.isInteger(value.pid) && value.pid > 0) process.stdout.write(`${value.pid}\n`);
+      } catch (_) {}
+    }
+  }
+}
+JS
+  )
   if [[ -n "${VERDACCIO_PID:-}" ]]; then
     kill "$VERDACCIO_PID" 2>/dev/null || true
     wait "$VERDACCIO_PID" 2>/dev/null || true
