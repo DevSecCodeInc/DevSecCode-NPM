@@ -35,9 +35,19 @@ test("capability requirements are per command", () => {
 });
 
 test("optional dependency matrix matches supported targets", () => {
+  assert.deepEqual(
+    Object.keys(pkg.optionalDependencies).sort(),
+    SUPPORTED_TARGETS.map(packageNameForTarget).sort(),
+  );
   for (const target of SUPPORTED_TARGETS) {
     assert.equal(pkg.optionalDependencies[packageNameForTarget(target)], pkg.version);
   }
+});
+
+test("planned linux-arm64 package cannot be published", () => {
+  const planned = require("../../scanner-linux-arm64/package.json");
+  assert.equal(planned.private, true);
+  assert.ok(!pkg.optionalDependencies[planned.name]);
 });
 
 test("Core endpoint discovery stays inside the package state root", () => {

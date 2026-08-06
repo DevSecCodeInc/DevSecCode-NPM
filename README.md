@@ -98,7 +98,7 @@ place CodeQL findings appear.
 | ------------------------------------- | --------------------------------------- |
 | macOS Apple Silicon (`darwin-arm64`)  | Public/starter Core artifact package   |
 | Linux x64                             | Public/starter Core artifact package (glibc; not Alpine / musl) |
-| Linux arm64                           | Public/starter Core artifact package (glibc; not Alpine / musl) |
+| Linux arm64                           | Planned after Core publishes and validates this target |
 | Windows x64                           | Public/starter Core artifact package   |
 | Intel Mac (`darwin-x64`)              | Not in this release — GitHub retired the macos-13 runner pool |
 
