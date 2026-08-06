@@ -1,7 +1,7 @@
 {
   "name": "@devseccode/scanner-linux-x64",
-  "version": "0.4.5",
-  "description": "Prebuilt public dsc CLI binary for linux-x64 (glibc). Installed automatically by @devseccode/scanner on x86_64 Linux.",
+  "version": "0.5.0-beta.1",
+  "description": "Packaged DevSecCode Core backend artifact for linux-x64 (glibc). Installed automatically by @devseccode/scanner on x86_64 Linux.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
   "repository": {
@@ -11,7 +11,9 @@
   },
   "homepage": "https://github.com/DevSecCode/DevSecCode-NPM#readme",
   "files": [
-    "bin/"
+    "artifacts/",
+    "README.md",
+    "LICENSE"
   ],
   "os": [
     "linux"

@@ -25,6 +25,28 @@ DRY_RUN_FLAGS=()
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN_FLAGS=("--dry-run")
 fi
+PUBLISH_TAG="${PUBLISH_TAG:-core-migration-canary}"
+
+PARENT_VERSION="$(node -e 'process.stdout.write(require(process.argv[1]).version)' \
+  "$NPM_DIST/packages/scanner/package.json")"
+if [[ "$PARENT_VERSION" == *-* && "$PUBLISH_TAG" == "latest" ]]; then
+  echo "publish-all: refusing to publish prerelease $PARENT_VERSION with the latest dist-tag" >&2
+  exit 2
+fi
+
+# Fail before the first publish if the package matrix is incomplete. This
+# avoids publishing the parent with optional dependencies that cannot resolve.
+for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+  pkg="$NPM_DIST/packages/scanner-$target"
+  manifest="$pkg/artifacts/devseccode-core-artifacts.json"
+  [[ -f "$manifest" ]] || { echo "publish-all: $pkg is missing its Core manifest" >&2; exit 1; }
+  [[ -f "$manifest.sig" ]] || { echo "publish-all: $pkg is missing its Core manifest signature" >&2; exit 1; }
+  platform_version="$(node -e 'process.stdout.write(require(process.argv[1]).version)' "$pkg/package.json")"
+  [[ "$platform_version" == "$PARENT_VERSION" ]] || {
+    echo "publish-all: $pkg version $platform_version does not match parent $PARENT_VERSION" >&2
+    exit 1
+  }
+done
 
 publish_dir() {
   local dir="$1"
@@ -32,21 +54,13 @@ publish_dir() {
     echo "publish-all: $dir is missing package.json -- skip" >&2
     return 0
   fi
-  echo "==> npm publish $dir"
-  ( cd "$dir" && npm publish --access public "${DRY_RUN_FLAGS[@]}" )
+  echo "==> npm publish $dir --tag $PUBLISH_TAG"
+  ( cd "$dir" && npm publish --access public --tag "$PUBLISH_TAG" "${DRY_RUN_FLAGS[@]}" )
 }
 
 # Platform packages first.
-for target in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
+for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
   pkg="$NPM_DIST/packages/scanner-$target"
-  # Only publish if the binary is actually present -- protects against
-  # publishing an empty wrapper if one build leg failed.
-  bin_name="dsc"
-  [[ "$target" == win32-* ]] && bin_name="dsc.exe"
-  if [[ ! -f "$pkg/bin/$bin_name" ]]; then
-    echo "publish-all: $pkg has no binary; skipping" >&2
-    continue
-  fi
   publish_dir "$pkg"
 done
 

@@ -1,65 +1,124 @@
 #!/usr/bin/env bash
-# Copy the freshly-built binary into the platform's npm package and stamp
-# both the parent and platform package.json files with the canonical
-# version pulled from engine/src/dsc/version.py.
+# Assemble a platform optional dependency from DevSecCode Core public/starter
+# release artifacts. The package contains the approved public Core artifact
+# archive plus devseccode-core-artifacts.json; the parent @devseccode/scanner
+# package owns the public CLI and starts the packaged backend through
+# @devseccode/core-launcher.
 #
 # Usage:
-#   bash npm-dist/scripts/assemble-platform-pkg.sh <target>
+#   bash npm-dist/scripts/assemble-platform-pkg.sh <target> <core-artifact-dir>
 #
-# Where <target> is one of darwin-arm64, darwin-x64, linux-x64,
-# linux-arm64, win32-x64. The binary must already exist at
-# npm-dist/build/<target>/dsc (or dsc.exe).
+# Where <target> is one of darwin-arm64, linux-x64, linux-arm64, win32-x64.
 
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 NPM_DIST="$ROOT/npm-dist"
 
-if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <target>" >&2
+if [[ $# -lt 2 ]]; then
+  echo "usage: $0 <target> <core-artifact-dir>" >&2
   exit 2
 fi
+
 TARGET="$1"
+CORE_ARTIFACT_DIR="$2"
+
 case "$TARGET" in
-  darwin-arm64|darwin-x64|linux-x64|linux-arm64|win32-x64) ;;
-  *) echo "assemble-platform-pkg: unknown target '$TARGET'" >&2; exit 2 ;;
+  darwin-arm64|linux-x64|linux-arm64|win32-x64) ;;
+  *) echo "assemble-platform-pkg: unknown or unsupported target '$TARGET'" >&2; exit 2 ;;
 esac
 
-VERSION="$(bash "$NPM_DIST/scripts/version.sh")"
-
 PKG_DIR="$NPM_DIST/packages/scanner-$TARGET"
+MANIFEST="$CORE_ARTIFACT_DIR/devseccode-core-artifacts.json"
+SIGNATURE="$MANIFEST.sig"
 if [[ ! -d "$PKG_DIR" ]]; then
   echo "assemble-platform-pkg: package dir $PKG_DIR not found" >&2
   exit 1
 fi
-
-BIN_NAME="dsc"
-[[ "$TARGET" == win32-* ]] && BIN_NAME="dsc.exe"
-BIN_SRC="$NPM_DIST/build/$TARGET/$BIN_NAME"
-BIN_DST="$PKG_DIR/bin/$BIN_NAME"
-
-if [[ ! -f "$BIN_SRC" ]]; then
-  echo "assemble-platform-pkg: binary $BIN_SRC missing -- run build-binary.sh $TARGET first" >&2
+if [[ ! -f "$MANIFEST" ]]; then
+  echo "assemble-platform-pkg: public/starter Core artifact manifest missing: $MANIFEST" >&2
+  exit 1
+fi
+if [[ ! -f "$SIGNATURE" ]]; then
+  echo "assemble-platform-pkg: signed Core artifact manifest missing: $SIGNATURE" >&2
   exit 1
 fi
 
-mkdir -p "$PKG_DIR/bin"
-# Remove the gitkeep so it doesn't ship in the tarball.
-rm -f "$PKG_DIR/bin/.gitkeep"
-cp "$BIN_SRC" "$BIN_DST"
-chmod +x "$BIN_DST" || true
+node "$NPM_DIST/scripts/validate-public-core-artifact.js" "$MANIFEST" "$CORE_ARTIFACT_DIR" "$TARGET"
 
-# Re-stamp the version in this platform package.json. We do it with a Python
-# one-liner instead of sed so we don't choke on different JSON formatting.
-python3 - "$PKG_DIR/package.json" "$VERSION" <<'PY'
-import json, sys
-path, version = sys.argv[1], sys.argv[2]
-with open(path, "r", encoding="utf-8") as f:
-    data = json.load(f)
-data["version"] = version
-with open(path, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
-    f.write("\n")
-PY
+ARCHIVE_INFO="$(node - "$MANIFEST" "$TARGET" <<'JS'
+const fs = require("node:fs");
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const target = process.argv[3];
+const artifact = (manifest.artifacts || []).find((item) => item.target === target);
+if (!artifact) {
+  console.error(`target ${target} missing from public/starter Core artifact manifest`);
+  process.exit(1);
+}
+if (!artifact.filename || !artifact.sha256 || !artifact.sizeBytes || !artifact.binaryRelativePath) {
+  console.error(`target ${target} artifact entry is incomplete`);
+  process.exit(1);
+}
+process.stdout.write(`${artifact.filename}\n${artifact.binaryRelativePath}`);
+JS
+)"
+ARCHIVE_NAME="$(printf '%s\n' "$ARCHIVE_INFO" | sed -n '1p')"
+BINARY_RELATIVE_PATH="$(printf '%s\n' "$ARCHIVE_INFO" | sed -n '2p')"
 
-echo "==> Assembled $PKG_DIR (version=$VERSION, binary=$BIN_DST)"
+ARCHIVE_SRC="$CORE_ARTIFACT_DIR/$ARCHIVE_NAME"
+if [[ ! -f "$ARCHIVE_SRC" ]]; then
+  echo "assemble-platform-pkg: public/starter Core artifact archive missing: $ARCHIVE_SRC" >&2
+  exit 1
+fi
+
+node - "$MANIFEST" "$CORE_ARTIFACT_DIR" "$TARGET" <<'JS'
+const fs = require("node:fs");
+const crypto = require("node:crypto");
+const path = require("node:path");
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const root = process.argv[3];
+const target = process.argv[4];
+const artifact = (manifest.artifacts || []).find((item) => item.target === target);
+const archive = path.join(root, artifact.filename);
+const actualSize = fs.statSync(archive).size;
+if (actualSize !== artifact.sizeBytes) {
+  console.error(`size mismatch for ${target}: expected ${artifact.sizeBytes}, got ${actualSize}`);
+  process.exit(1);
+}
+const hash = crypto.createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
+if (hash !== artifact.sha256) {
+  console.error(`sha256 mismatch for ${target}: expected ${artifact.sha256}, got ${hash}`);
+  process.exit(1);
+}
+JS
+
+TMP_EXTRACT="$(mktemp -d)"
+cleanup_extract() {
+  rm -rf "$TMP_EXTRACT"
+}
+trap cleanup_extract EXIT
+
+tar -xzf "$ARCHIVE_SRC" -C "$TMP_EXTRACT"
+if [[ ! -f "$TMP_EXTRACT/$BINARY_RELATIVE_PATH" ]]; then
+  echo "assemble-platform-pkg: expected backend missing after extraction: $BINARY_RELATIVE_PATH" >&2
+  exit 1
+fi
+
+LOCAL_PATH_REPORT="$TMP_EXTRACT/local-path-report.txt"
+if grep -R -a -n -E '/Users/[^/[:space:][:cntrl:]]+/(Projects|projects|src|code)/|/home/[^/[:space:][:cntrl:]]+/(work|Projects|projects|src|code)/|DevSecCode-Core|DevSecCode-Scanner' "$TMP_EXTRACT" >"$LOCAL_PATH_REPORT" 2>/dev/null; then
+  echo "assemble-platform-pkg: public/starter Core artifact contains local checkout paths; refusing to package it" >&2
+  sed -n '1,20p' "$LOCAL_PATH_REPORT" >&2
+  exit 1
+fi
+
+rm -rf "$PKG_DIR/artifacts"
+mkdir -p "$PKG_DIR/artifacts"
+cp "$MANIFEST" "$PKG_DIR/artifacts/devseccode-core-artifacts.json"
+cp "$SIGNATURE" "$PKG_DIR/artifacts/devseccode-core-artifacts.json.sig"
+cp "$ARCHIVE_SRC" "$PKG_DIR/artifacts/$ARCHIVE_NAME"
+
+if [[ -f "$CORE_ARTIFACT_DIR/$ARCHIVE_NAME.sha256" ]]; then
+  cp "$CORE_ARTIFACT_DIR/$ARCHIVE_NAME.sha256" "$PKG_DIR/artifacts/$ARCHIVE_NAME.sha256"
+fi
+
+echo "==> Assembled $PKG_DIR from public/starter Core artifact $ARCHIVE_NAME"

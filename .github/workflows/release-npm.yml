@@ -1,28 +1,16 @@
 name: Release to npm
 
-# Tag-driven release. Push a `npm-vX.Y.Z` tag that matches the version
-# already committed in engine/src/dsc/version.py and this workflow:
+# Core-backed npm release. This workflow packages already-built
+# DevSecCode-Core public/starter backend artifacts; it does not build the
+# scanner engine, OpenGrep bundle, or a PyInstaller CLI binary in this
+# repository.
 #
-#   1. Builds the dsc CLI binary on each platform runner via PyInstaller
-#   2. Assembles each @devseccode/scanner-<platform>-<arch> tarball
-#   3. Publishes every platform package FIRST
-#   4. Publishes the parent @devseccode/scanner LAST (so optionalDependencies
-#      always resolve on the first user `npx`)
-#
-# Publishes the public DevSecCode CLI package. The package is publicly
-# downloadable from npm for frictionless `npx @devseccode/scanner scan .`, while
-# the license remains proprietary.
-#
-# Requires:
-#   secrets.NPM_TOKEN              -- automation token for npmjs.com with
-#                                     publish rights for @devseccode/*
-#   environment: npm               -- manual approval gate before publish
-# Optional (macOS notarization, recommended but skippable on day one):
-#   secrets.APPLE_DEVELOPER_ID_APPLICATION_CERT_P12  (base64 .p12)
-#   secrets.APPLE_DEVELOPER_ID_APPLICATION_CERT_PASSWORD
-#   secrets.APPLE_ID
-#   secrets.APPLE_TEAM_ID
-#   secrets.APPLE_APP_PASSWORD
+# Required:
+#   secrets.NPM_TOKEN              -- npm automation token for @devseccode/*
+#   secrets.CORE_ARTIFACT_URL      -- optional default URL to a tar/zip bundle
+#                                     containing devseccode-core-artifacts.json
+#                                     and all referenced public/starter
+#                                     platform archives.
 
 on:
   push:
@@ -30,112 +18,204 @@ on:
       - "npm-v*"
   workflow_dispatch:
     inputs:
+      core_artifact_url:
+        description: "URL to public/starter Core artifact bundle (.tar.gz, .tgz, or .zip)"
+        required: false
+        default: ""
       dry_run:
         description: "Pack tarballs but skip npm publish"
         required: false
         default: "true"
         type: choice
         options: ["true", "false"]
+      dist_tag:
+        description: "npm dist-tag for publish"
+        required: false
+        default: "core-migration-canary"
 
 jobs:
-  build:
-    name: Build (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: macos-14
-            target: darwin-arm64
-          # darwin-x64 (Intel Mac) is intentionally omitted: GitHub retired
-          # the macos-13 runner image and no Intel Mac runner remains in
-          # the hosted pool. Add back via self-hosted or paid CI when
-          # there is enough Intel demand to justify the hosting cost.
-          - runner: ubuntu-24.04
-            target: linux-x64
-          - runner: ubuntu-24.04-arm
-            target: linux-arm64
-          - runner: windows-2022
-            target: win32-x64
-    runs-on: ${{ matrix.runner }}
+  package:
+    name: Package public/starter Core artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
 
-      - name: Install engine + PyInstaller
+      - name: Verify release ref and package versions
         shell: bash
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e "engine/[dev]"
-          pip install pyinstaller
-
-      # Download the platform-matched OpenGrep binary so PyInstaller can
-      # bundle it into the dsc executable. Without this step the spec's
-      # `_opengrep_bin.exists()` check is False and the resulting binary
-      # crashes at runtime with "opengrep binary not found".
-      - name: Setup OpenGrep
-        shell: bash
-        run: bash engine/vendor/opengrep/setup.sh
-
-      - name: Build CLI binary
-        shell: bash
-        run: bash npm-dist/scripts/build-binary.sh "${{ matrix.target }}"
-
-      # macOS code-signing + notarization. The step is a no-op when the
-      # APPLE_* secrets are not configured -- the binary still ships, just
-      # without a Developer ID signature, and Gatekeeper will prompt on
-      # first launch. Add the secrets once an Apple Developer ID Application
-      # cert is in place.
-      - name: Sign + notarize (macOS)
-        if: startsWith(matrix.target, 'darwin-')
         env:
-          APPLE_CERT_P12: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_CERT_P12 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION_CERT_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+        run: |
+          node - "$RELEASE_TAG" <<'JS'
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const targets = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
+          const parent = JSON.parse(fs.readFileSync("npm-dist/packages/scanner/package.json", "utf8"));
+          for (const target of targets) {
+            const name = `@devseccode/scanner-${target}`;
+            const file = path.join("npm-dist", "packages", `scanner-${target}`, "package.json");
+            const platformPackage = JSON.parse(fs.readFileSync(file, "utf8"));
+            if (platformPackage.version !== parent.version) {
+              throw new Error(`${name} version ${platformPackage.version} does not match parent ${parent.version}`);
+            }
+            if (parent.optionalDependencies[name] !== parent.version) {
+              throw new Error(`${name} optional dependency is not pinned to ${parent.version}`);
+            }
+          }
+          const releaseTag = process.argv[2];
+          if (releaseTag && releaseTag !== `npm-v${parent.version}`) {
+            throw new Error(`release tag ${releaseTag} must equal npm-v${parent.version}`);
+          }
+          console.log(`release package version ${parent.version}`);
+          JS
+
+      - name: Verify Core launcher dependency is published
         shell: bash
         run: |
-          if [ -z "${APPLE_CERT_P12:-}" ]; then
-            echo "::warning::APPLE_DEVELOPER_ID_APPLICATION_CERT_P12 not set; skipping codesign + notarize. Users on a fresh Mac will hit Gatekeeper on first launch."
-            exit 0
-          fi
-          bash npm-dist/scripts/sign-and-notarize-macos.sh "${{ matrix.target }}"
+          node - <<'JS'
+          const pkg = require("./npm-dist/packages/scanner/package.json");
+          const version = pkg.dependencies && pkg.dependencies["@devseccode/core-launcher"];
+          if (!version) {
+            console.error("@devseccode/core-launcher dependency missing from parent package");
+            process.exit(1);
+          }
+          console.log(version);
+          JS
+          VERSION="$(node -e 'process.stdout.write(require("./npm-dist/packages/scanner/package.json").dependencies["@devseccode/core-launcher"])')"
+          npm view "@devseccode/core-launcher@$VERSION" version
 
-      - name: Assemble platform package
+      - name: Resolve artifact bundle URL
+        id: artifact-url
         shell: bash
-        run: bash npm-dist/scripts/assemble-platform-pkg.sh "${{ matrix.target }}"
+        env:
+          INPUT_URL: ${{ github.event.inputs.core_artifact_url }}
+          SECRET_URL: ${{ secrets.CORE_ARTIFACT_URL }}
+        run: |
+          URL="${INPUT_URL:-$SECRET_URL}"
+          if [ -z "$URL" ]; then
+            echo "::error::Set workflow input core_artifact_url or secret CORE_ARTIFACT_URL."
+            exit 2
+          fi
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download public/starter Core artifact bundle
+        shell: bash
+        run: |
+          mkdir -p npm-dist/_core-artifacts
+          curl -L "${{ steps.artifact-url.outputs.url }}" -o npm-dist/_core-artifacts/core-artifacts.bundle
+          file npm-dist/_core-artifacts/core-artifacts.bundle
+
+      - name: Extract public/starter Core artifact bundle
+        shell: bash
+        run: |
+          mkdir -p npm-dist/_core-artifacts/extracted
+          python3 npm-dist/scripts/extract-core-artifact-bundle.py \
+            npm-dist/_core-artifacts/core-artifacts.bundle \
+            npm-dist/_core-artifacts/extracted
+          find npm-dist/_core-artifacts/extracted -maxdepth 3 -type f -print
+
+      - name: Locate public/starter Core artifact manifest
+        id: core-artifacts
+        shell: bash
+        run: |
+          MANIFEST="$(find npm-dist/_core-artifacts/extracted -name devseccode-core-artifacts.json -type f | head -n1)"
+          if [ -z "$MANIFEST" ]; then
+            echo "::error::devseccode-core-artifacts.json not found in bundle."
+            exit 1
+          fi
+          if [ ! -f "$MANIFEST.sig" ]; then
+            echo "::error::devseccode-core-artifacts.json.sig not found beside manifest."
+            exit 1
+          fi
+          DIR="$(dirname "$MANIFEST")"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Verify signed Core artifact manifest
+        shell: bash
+        run: |
+          node - "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" <<'JS'
+          const { verifyManifestSignature } = require("./npm-dist/packages/scanner/lib/artifact-trust");
+          verifyManifestSignature(process.argv[2]);
+          console.log("Core artifact manifest signature verified");
+          JS
+
+      - name: Validate target coverage
+        shell: bash
+        run: |
+          node - "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" <<'JS'
+          const fs = require("node:fs");
+          const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          const have = new Set((manifest.artifacts || []).map((item) => item.target));
+          const required = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
+          const missing = required.filter((target) => !have.has(target));
+          if (missing.length) {
+            console.error(`Missing public/starter Core artifact targets: ${missing.join(", ")}`);
+            process.exit(1);
+          }
+          JS
+
+      - name: Validate public/starter artifact profile
+        shell: bash
+        run: |
+          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+            node npm-dist/scripts/validate-public-core-artifact.js \
+              "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" \
+              "${{ steps.core-artifacts.outputs.dir }}" \
+              "$target"
+          done
+
+      - name: Verify no generated Core payload is tracked
+        shell: bash
+        run: |
+          if git ls-files 'npm-dist/packages/scanner-*/artifacts/*' | grep -v '/.gitkeep$' | grep -q .; then
+            echo "::error::Generated Core payloads must be assembled in CI, not committed."
+            git ls-files 'npm-dist/packages/scanner-*/artifacts/*' | grep -v '/.gitkeep$'
+            exit 1
+          fi
+
+      - name: Assemble platform packages
+        shell: bash
+        run: |
+          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+            bash npm-dist/scripts/assemble-platform-pkg.sh "$target" "${{ steps.core-artifacts.outputs.dir }}"
+          done
+
+      - name: Run parent package tests
+        shell: bash
+        run: node --test npm-dist/packages/scanner/test/*.test.js
+
+      - name: Package dry run
+        shell: bash
+        run: |
+          export npm_config_cache="$RUNNER_TEMP/npm-cache"
+          ( cd npm-dist/packages/scanner && npm pack --dry-run )
+          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+            ( cd "npm-dist/packages/scanner-$target" && npm pack --dry-run )
+          done
+
+      - name: Fresh install smoke with packaged Linux public/starter Core artifact
+        shell: bash
+        run: |
+          export npm_config_cache="$RUNNER_TEMP/npm-cache"
+          DSC_CORE_TARGET=linux-x64 \
+            DSC_CORE_ARTIFACT_DIR="${{ steps.core-artifacts.outputs.dir }}" \
+            bash npm-dist/scripts/test-local-install.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pkg-${{ matrix.target }}
-          path: npm-dist/packages/scanner-${{ matrix.target }}/
+          name: npm-core-packages
+          path: npm-dist/packages/
           if-no-files-found: error
-
-  verify-versions:
-    name: Version sanity check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Tag matches engine version
-        shell: bash
-        run: |
-          REF="${GITHUB_REF##*/}"          # npm-v0.4.1
-          TAG_VERSION="${REF#npm-v}"        # 0.4.1
-          ENGINE_VERSION="$(bash npm-dist/scripts/version.sh)"
-          echo "Tag:    $TAG_VERSION"
-          echo "Engine: $ENGINE_VERSION"
-          if [ "$TAG_VERSION" != "$ENGINE_VERSION" ]; then
-            echo "::error::npm-v$TAG_VERSION does not match engine/src/dsc/version.py ($ENGINE_VERSION)."
-            exit 1
-          fi
-        if: startsWith(github.ref, 'refs/tags/npm-v')
 
   publish:
     name: Publish to npm
-    needs: [build, verify-versions]
+    needs: [package]
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -150,36 +230,21 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          path: npm-dist/_artifacts/
-
-      # The build job uploaded each platform dir as pkg-<target>; copy
-      # them back into npm-dist/packages/scanner-<target>/ so the same scripts
-      # the dev runs locally also work here.
-      - name: Restore platform packages
-        shell: bash
-        run: |
-          for d in npm-dist/_artifacts/pkg-*; do
-            target="${d#npm-dist/_artifacts/pkg-}"
-            dest="npm-dist/packages/scanner-$target"
-            mkdir -p "$dest"
-            cp -R "$d"/* "$dest"/
-            ls -la "$dest/bin/" || true
-          done
-
-      - name: Stamp parent version
-        shell: bash
-        run: bash npm-dist/scripts/stamp-parent-version.sh
+          name: npm-core-packages
+          path: npm-dist/packages/
 
       - name: Publish
         if: github.event_name == 'push' || github.event.inputs.dry_run == 'false'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PUBLISH_TAG: ${{ github.event.inputs.dist_tag || 'core-migration-canary' }}
         shell: bash
         run: bash npm-dist/scripts/publish-all.sh
 
-      - name: Dry-run publish (workflow_dispatch only)
+      - name: Dry-run publish
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PUBLISH_TAG: ${{ github.event.inputs.dist_tag || 'core-migration-canary' }}
         shell: bash
         run: bash npm-dist/scripts/publish-all.sh --dry-run

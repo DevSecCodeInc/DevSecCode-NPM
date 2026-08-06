@@ -1,7 +1,8 @@
 # @devseccode/scanner
 
-> Gamified local SAST. Find SQL injection, hardcoded secrets, XSS, and
-> other CWE classics — no SaaS, no Python toolchain, no CI gate required.
+> Gamified local SAST backed by packaged DevSecCode public/starter Core
+> artifacts. Find SQL injection, hardcoded secrets, XSS, and other CWE
+> classics with one npm install.
 
 ## Try it now
 
@@ -9,9 +10,8 @@
 npx @devseccode/scanner hunt .
 ```
 
-No install, no signup, no config. The scanner downloads a prebuilt
-~18 MB binary for your platform and runs locally. Your source code never
-leaves your machine.
+No signup and no separate Core install. npm installs the matching platform
+public/starter artifact automatically; your source code stays on your machine.
 
 ## What it does
 
@@ -25,8 +25,9 @@ leaves your machine.
 - **Standard outputs** — SARIF (for GitHub Code Scanning), JUnit (for
   CI test runners), JSON (for downstream tooling), and a colorized
   terminal report.
-- **Zero runtime dependencies** — a single PyInstaller binary per
-  platform. No Python install required, no network calls at runtime.
+- **Single npm install** — the parent package carries the Node CLI/UX and the
+  matching optional platform package carries the public/starter Core backend
+  artifact.
 
 ## Install
 
@@ -81,9 +82,9 @@ The SARIF output lights up GitHub's native **Security** tab.
 
 ## Supported platforms
 
-The parent package declares one `optionalDependencies` entry per
-platform. `npm` installs only the package that matches your machine; the
-rest are skipped by the `os` / `cpu` fields.
+The parent package declares one public/starter Core-artifact
+`optionalDependencies` entry per platform. `npm` installs only the package that
+matches your machine; the rest are skipped by the `os` / `cpu` fields.
 
 | Target                                | Package                                 |
 | ------------------------------------- | --------------------------------------- |

@@ -1,7 +1,7 @@
 {
   "name": "@devseccode/scanner-darwin-arm64",
-  "version": "0.4.5",
-  "description": "Prebuilt public dsc CLI binary for darwin-arm64. Installed automatically by @devseccode/scanner on Apple Silicon Macs.",
+  "version": "0.5.0-beta.1",
+  "description": "Packaged DevSecCode Core backend artifact for darwin-arm64. Installed automatically by @devseccode/scanner on Apple Silicon Macs.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
   "repository": {
@@ -11,7 +11,9 @@
   },
   "homepage": "https://github.com/DevSecCode/DevSecCode-NPM#readme",
   "files": [
-    "bin/"
+    "artifacts/",
+    "README.md",
+    "LICENSE"
   ],
   "os": [
     "darwin"
