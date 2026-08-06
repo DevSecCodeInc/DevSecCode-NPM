@@ -14,7 +14,7 @@ npm-dist/
 │   ├── scanner/                    ← @devseccode/scanner (Node CLI/UX)
 │   ├── scanner-darwin-arm64/       ← public/starter Core artifact package
 │   ├── scanner-linux-x64/
-│   ├── scanner-linux-arm64/
+│   ├── scanner-linux-arm64/        ← private scaffold for planned support
 │   └── scanner-win32-x64/
 └── scripts/
     ├── version.sh              ← echoes parent npm wrapper version
@@ -51,7 +51,6 @@ inspectable, the Core public-starter profile—not compilation—is the IP bound
 CORE_ARTIFACT_DIR=/path/to/core-release-artifacts
 bash npm-dist/scripts/assemble-platform-pkg.sh darwin-arm64 "$CORE_ARTIFACT_DIR"
 bash npm-dist/scripts/assemble-platform-pkg.sh linux-x64 "$CORE_ARTIFACT_DIR"
-bash npm-dist/scripts/assemble-platform-pkg.sh linux-arm64 "$CORE_ARTIFACT_DIR"
 bash npm-dist/scripts/assemble-platform-pkg.sh win32-x64 "$CORE_ARTIFACT_DIR"
 DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" bash npm-dist/scripts/test-local-install.sh
 ```
@@ -71,6 +70,9 @@ DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" bash npm-dist/scripts/test-local-inst
   hook, or node-gyp.
 - **Alpine / musl Linux is not supported.** Use a glibc image such as Debian
   or Ubuntu in CI.
+- **Linux arm64 is planned, not published.** The private package scaffold is
+  retained so it can be activated only after Core adds a signed, accepted
+  `public-starter` target.
 
 See [`DevSecCode-NPM Core Migration Plan.md`](../docs/DevSecCode-NPM%20Core%20Migration%20Plan.md)
 for the migration contract and release gates.

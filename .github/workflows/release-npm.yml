@@ -55,7 +55,7 @@ jobs:
           node - "$RELEASE_TAG" <<'JS'
           const fs = require("node:fs");
           const path = require("node:path");
-          const targets = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
+          const targets = ["darwin-arm64", "linux-x64", "win32-x64"];
           const parent = JSON.parse(fs.readFileSync("npm-dist/packages/scanner/package.json", "utf8"));
           for (const target of targets) {
             const name = `@devseccode/scanner-${target}`;
@@ -152,7 +152,7 @@ jobs:
           const fs = require("node:fs");
           const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
           const have = new Set((manifest.artifacts || []).map((item) => item.target));
-          const required = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
+          const required = ["darwin-arm64", "linux-x64", "win32-x64"];
           const missing = required.filter((target) => !have.has(target));
           if (missing.length) {
             console.error(`Missing public/starter Core artifact targets: ${missing.join(", ")}`);
@@ -163,7 +163,7 @@ jobs:
       - name: Validate public/starter artifact profile
         shell: bash
         run: |
-          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+          for target in darwin-arm64 linux-x64 win32-x64; do
             node npm-dist/scripts/validate-public-core-artifact.js \
               "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" \
               "${{ steps.core-artifacts.outputs.dir }}" \
@@ -182,7 +182,7 @@ jobs:
       - name: Assemble platform packages
         shell: bash
         run: |
-          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+          for target in darwin-arm64 linux-x64 win32-x64; do
             bash npm-dist/scripts/assemble-platform-pkg.sh "$target" "${{ steps.core-artifacts.outputs.dir }}"
           done
 
@@ -195,7 +195,7 @@ jobs:
         run: |
           export npm_config_cache="$RUNNER_TEMP/npm-cache"
           ( cd npm-dist/packages/scanner && npm pack --dry-run )
-          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+          for target in darwin-arm64 linux-x64 win32-x64; do
             ( cd "npm-dist/packages/scanner-$target" && npm pack --dry-run )
           done
 

@@ -36,7 +36,7 @@ fi
 
 # Fail before the first publish if the package matrix is incomplete. This
 # avoids publishing the parent with optional dependencies that cannot resolve.
-for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+for target in darwin-arm64 linux-x64 win32-x64; do
   pkg="$NPM_DIST/packages/scanner-$target"
   manifest="$pkg/artifacts/devseccode-core-artifacts.json"
   [[ -f "$manifest" ]] || { echo "publish-all: $pkg is missing its Core manifest" >&2; exit 1; }
@@ -59,7 +59,7 @@ publish_dir() {
 }
 
 # Platform packages first.
-for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
+for target in darwin-arm64 linux-x64 win32-x64; do
   pkg="$NPM_DIST/packages/scanner-$target"
   publish_dir "$pkg"
 done

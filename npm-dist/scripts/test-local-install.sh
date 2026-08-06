@@ -14,7 +14,7 @@ infer_target() {
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) echo "darwin-arm64" ;;
     Linux-x86_64|Linux-amd64) echo "linux-x64" ;;
-    Linux-aarch64|Linux-arm64) echo "linux-arm64" ;;
+    Linux-aarch64|Linux-arm64) echo "test-local-install: linux-arm64 is planned but not supported in this release" >&2; exit 1 ;;
     *) echo "test-local-install: unsupported host $(uname -s)-$(uname -m)" >&2; exit 1 ;;
   esac
 }

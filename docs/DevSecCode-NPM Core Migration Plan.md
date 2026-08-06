@@ -31,7 +31,8 @@ They should not need a separate DevSecCode-Core checkout or manual backend insta
   - Reject archives containing full-Core payload markers, including `compliance_seeds`, private/premium/enterprise assets, model assets, SBOM/model bundles, or broad compliance/premium preset data.
   - Require Core's detached Ed25519 manifest signature and verify it against the vendor public key pinned in the parent NPM package before trusting any manifest field, filename, checksum, or archive.
   - Treat the compiled public-starter backend as inspectable public distribution. Compilation and packaging are not IP controls; Core's source/profile allowlist and release validator are the IP boundary.
-  - Keep the current supported matrix initially: `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`.
+  - Keep the Core-approved initial matrix: `darwin-arm64`, `linux-x64`, `win32-x64`.
+  - Retain `linux-arm64` only as a private planned scaffold until Core publishes and validates that target.
   - Do not add `darwin-x64` until Core artifact production and release validation exist for that target.
   - Remove stale `darwin-x64` publishing/build assumptions from release scripts while this target is unsupported.
 
@@ -103,7 +104,7 @@ They should not need a separate DevSecCode-Core checkout or manual backend insta
     - `devseccode-core-artifacts.json` declares `artifactProfile: "public-starter"` and `publicNpm: true`.
     - The manifest declares a non-empty public/starter rule allowlist and rulepack file limit.
     - The manifest and archive do not declare or contain full/private Core payloads, full compliance mappings, model assets, premium scanner logic, private backend assets, or scanner-bound model bundles.
-    - `devseccode-core-artifacts.json` contains `darwin-arm64`, `linux-x64`, `linux-arm64`, and `win32-x64`.
+    - `devseccode-core-artifacts.json` contains `darwin-arm64`, `linux-x64`, and `win32-x64`.
     - Every referenced archive exists, matches `sha256` and `sizeBytes`, extracts safely, and contains the expected `dsc-backend` or `dsc-backend.exe`.
     - Generated Core manifests, signatures, and archives are never committed to this repository; release CI assembles them into package tarballs from an immutable signed Core handoff.
     - Each platform package tarball contains the expected Core manifest/archive layout and no old `dsc` PyInstaller CLI binary.
