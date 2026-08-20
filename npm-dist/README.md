@@ -45,6 +45,27 @@ parent package. Generated Core archives are CI inputs and are never committed
 to this repository. Because npm payloads and compiled executables are publicly
 inspectable, the Core public-starter profile—not compilation—is the IP boundary.
 
+## Intended artifact-v2 contract
+
+NPM's migration target is Core's
+[`artifact-v2 downstream product contract`](https://github.com/DevSecCodeInc/DevSecCode-Core/blob/main/docs/distribution/artifact-v2-downstream-contract.md).
+This section describes the intended contract and does not claim that NPM is
+already connected to artifact-v2.
+
+NPM consumes only a signed `devseccode-core-artifacts/v2` `public-starter`
+matrix through `@devseccode/core-launcher` and the shared validator. Each
+platform optional package contains the exact verified Core archive for its
+target. The parent package and all platform packages in one candidate bind the
+same Core manifest, source commit, trust bundle, and immutable Core input.
+
+`full-core`, private assets, private rulepacks, compliance seeds, model assets,
+and premium scanner logic must never enter an npm tarball. Installation is
+package extraction only: there is no postinstall downloader, Core rebuild,
+Python environment, OpenGrep installation, compiler, or container-runtime
+requirement. NPM owns command parsing, terminal presentation, JavaScript APIs,
+profiles, quests, achievements, publishing order, canary validation, and
+promotion. Scanner evidence comes from public-starter Core through `/v1`.
+
 ## Building Locally
 
 ```bash
