@@ -28,8 +28,8 @@ your source code stays on your machine.
   crypto, cleartext HTTP, XXE, and CSRF — for Python, JavaScript /
   TypeScript, Go, Java, and Rust.
 - **Infrastructure scanning** for Dockerfiles and Kubernetes manifests.
-- **Gamified TUI** — a scan map, encounter cards, and a triage flow
-  designed to be run more than once.
+- **Gamified hunts** — XP, levels, achievements, streaks, quests, and shield
+  scores designed to make repeated scanning useful.
 - **Standard outputs** — SARIF (for GitHub code scanning), JUnit (for
   CI test runners), JSON (for downstream tooling), and a colorized
   terminal report.
@@ -98,7 +98,7 @@ place CodeQL findings appear.
 | ------------------------------------- | --------------------------------------- |
 | macOS Apple Silicon (`darwin-arm64`)  | Public/starter Core artifact package   |
 | Linux x64                             | Public/starter Core artifact package (glibc; not Alpine / musl) |
-| Linux arm64                           | Planned after Core publishes and validates this target |
+| Linux arm64                           | Public/starter Core artifact package (glibc; not Alpine / musl) |
 | Windows x64                           | Public/starter Core artifact package   |
 | Intel Mac (`darwin-x64`)              | Not in this release — GitHub retired the macos-13 runner pool |
 
@@ -130,7 +130,7 @@ npm-dist/              npm packaging for the Core-backed CLI
   packages/scanner/    Parent Node CLI/UX package (@devseccode/scanner)
   packages/scanner-*/  Per-platform public/starter Core artifact packages
   scripts/             Public/starter Core artifact assembly and publish helpers
-.github/workflows/     Tag-driven release pipeline (release-npm.yml)
+.github/workflows/     Manual candidate and exact-version promotion pipelines
 resources/sample-vulns/ Tiny fixtures the test scripts scan as a smoke check
 ```
 

@@ -1,70 +1,51 @@
 #!/usr/bin/env bash
-# Publish every assembled platform package to npm, then the parent.
-#
-# All packages publish with --access public. The package remains proprietary
-# via LICENSE, but public npm access keeps `npx @devseccode/scanner scan .`
-# frictionless for first-time users.
-#
-# CRITICAL: the platform packages must be on the registry BEFORE the
-# parent, otherwise the parent's optionalDependencies fail to resolve on
-# first npx invocation.
-#
-# Requires NODE_AUTH_TOKEN (or `npm login`) to be configured. CI sets it
-# via the npm setup-node action.
-#
-# Usage:
-#   bash npm-dist/scripts/publish-all.sh             # all platforms + parent
-#   bash npm-dist/scripts/publish-all.sh --dry-run   # show what would publish
 
 set -euo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
-NPM_DIST="$ROOT/npm-dist"
-
-DRY_RUN_FLAGS=()
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN_FLAGS=("--dry-run")
-fi
-PUBLISH_TAG="${PUBLISH_TAG:-core-migration-canary}"
-
-PARENT_VERSION="$(node -e 'process.stdout.write(require(process.argv[1]).version)' \
-  "$NPM_DIST/packages/scanner/package.json")"
-if [[ "$PARENT_VERSION" == *-* && "$PUBLISH_TAG" == "latest" ]]; then
-  echo "publish-all: refusing to publish prerelease $PARENT_VERSION with the latest dist-tag" >&2
+if [[ $# -lt 1 ]]; then
+  echo "usage: $0 <candidate-directory> [--dry-run]" >&2
   exit 2
 fi
 
-# Fail before the first publish if the package matrix is incomplete. This
-# avoids publishing the parent with optional dependencies that cannot resolve.
-for target in darwin-arm64 linux-x64 win32-x64; do
-  pkg="$NPM_DIST/packages/scanner-$target"
-  manifest="$pkg/artifacts/devseccode-core-artifacts.json"
-  [[ -f "$manifest" ]] || { echo "publish-all: $pkg is missing its Core manifest" >&2; exit 1; }
-  [[ -f "$manifest.sig" ]] || { echo "publish-all: $pkg is missing its Core manifest signature" >&2; exit 1; }
-  platform_version="$(node -e 'process.stdout.write(require(process.argv[1]).version)' "$pkg/package.json")"
-  [[ "$platform_version" == "$PARENT_VERSION" ]] || {
-    echo "publish-all: $pkg version $platform_version does not match parent $PARENT_VERSION" >&2
-    exit 1
-  }
-done
+CANDIDATE_DIR="$1"
+DRY_RUN="${2:-}"
+RECORD="$CANDIDATE_DIR/devseccode-npm-release.json"
+PUBLISH_TAG="${PUBLISH_TAG:-artifact-v2-candidate}"
 
-publish_dir() {
-  local dir="$1"
-  if [[ ! -f "$dir/package.json" ]]; then
-    echo "publish-all: $dir is missing package.json -- skip" >&2
-    return 0
-  fi
-  echo "==> npm publish $dir --tag $PUBLISH_TAG"
-  ( cd "$dir" && npm publish --access public --tag "$PUBLISH_TAG" "${DRY_RUN_FLAGS[@]}" )
+[[ -f "$RECORD" ]] || { echo "publish-all: candidate record missing: $RECORD" >&2; exit 1; }
+VERSION="$(node -p "require('$RECORD').product.version")"
+
+mapfile -t PACKAGE_ROWS < <(node - "$RECORD" <<'JS'
+const record = require(process.argv[2]);
+for (const item of record.packages) {
+  process.stdout.write(`${item.name}\t${item.filename}\t${item.integrity}\n`);
 }
+JS
+)
 
-# Platform packages first.
-for target in darwin-arm64 linux-x64 win32-x64; do
-  pkg="$NPM_DIST/packages/scanner-$target"
-  publish_dir "$pkg"
+for row in "${PACKAGE_ROWS[@]}"; do
+  IFS=$'\t' read -r name filename expected_integrity <<<"$row"
+  [[ -f "$CANDIDATE_DIR/$filename" ]] || { echo "publish-all: package missing: $filename" >&2; exit 1; }
+  published_integrity="$(npm view "$name@$VERSION" dist.integrity 2>/dev/null || true)"
+  if [[ -n "$published_integrity" && "$published_integrity" != "$expected_integrity" ]]; then
+    echo "publish-all: npm already contains different bytes for $name@$VERSION" >&2
+    exit 1
+  fi
 done
 
-# Then the parent so optionalDependencies always resolve.
-publish_dir "$NPM_DIST/packages/scanner"
+for row in "${PACKAGE_ROWS[@]}"; do
+  IFS=$'\t' read -r name filename expected_integrity <<<"$row"
+  published_integrity="$(npm view "$name@$VERSION" dist.integrity 2>/dev/null || true)"
+  if [[ -n "$published_integrity" ]]; then
+    echo "==> $name@$VERSION already contains the accepted bytes"
+    continue
+  fi
+  flags=(--access public --tag "$PUBLISH_TAG" --provenance)
+  if [[ "$DRY_RUN" == "--dry-run" ]]; then
+    flags+=(--dry-run)
+  fi
+  echo "==> npm publish $filename --tag $PUBLISH_TAG"
+  npm publish "$CANDIDATE_DIR/$filename" "${flags[@]}"
+done
 
-echo "==> Done."
+echo "==> Candidate package publication complete."

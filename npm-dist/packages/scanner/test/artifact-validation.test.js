@@ -32,36 +32,105 @@ function sha256(file) {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
+function digest(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
 function writeManifest(workDir, archive, overrides = {}) {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
+  const publicDer = publicKey.export({ type: "spki", format: "der" });
+  const signingKeyId = `ed25519:${digest(publicDer).slice(0, 16)}`;
+  const sourceCommit = "a".repeat(40);
+  const sourceFingerprint = digest("source");
+  const packagingFingerprint = digest("packaging");
+  const dependencyLockSha256 = digest("lock");
+  const buildToolchainFingerprint = digest("toolchain");
+  const publicRuleIds = ["starter-rule"];
+  const evidence = (name) => ({ filename: name, sha256: digest(name), format: "json" });
   const manifest = {
-    schemaVersion: "devseccode-core-artifacts/v1",
+    schemaVersion: "devseccode-core-artifacts/v2",
+    generatedAt: "2026-08-21T00:00:00Z",
+    engineVersion: "0.3.6",
+    contractVersion: "v1",
     artifactProfile: "public-starter",
+    sourceFingerprint,
+    sourceCommit,
+    packagingFingerprint,
+    buildToolchainFingerprints: { "darwin-arm64": buildToolchainFingerprint },
+    dependencyLockSha256,
+    requiredCapabilities: ["scan.workspace", "scan.export.sarif"],
+    publication: {
+      channel: "candidate",
+      candidateId: `${sourceCommit}-run-1-attempt-1`,
+      immutableBaseUrl: `https://pub-${"b".repeat(32)}.r2.dev/candidates/v2/${sourceCommit}-run-1-attempt-1`,
+      releasePath: "core/v0.3.6/public-starter",
+    },
+    signing: {
+      algorithm: "ed25519",
+      keyId: signingKeyId,
+      signatureFilename: "devseccode-core-artifacts.json.sig",
+      trustBundleFilename: "artifact-trust.json",
+      trustBundleVersion: "v1",
+      trustBundleSha256: digest("trust-bundle"),
+    },
+    sbom: evidence("matrix.spdx.json"),
+    provenance: evidence("matrix.provenance.json"),
     publicNpm: true,
     containsFullCore: false,
     containsPrivateAssets: false,
-    publicRuleIds: ["starter-rule"],
+    publicRuleIds,
+    starterRuleIds: publicRuleIds,
     maxRulepackFiles: 1,
     artifacts: [{
       target: "darwin-arm64",
+      platform: "darwin",
+      arch: "arm64",
       filename: path.basename(archive),
       sha256: sha256(archive),
       sizeBytes: fs.statSync(archive).size,
+      engineVersion: "0.3.6",
+      contractVersion: "v1",
+      format: "tar.gz",
+      extractDir: "backend",
       binaryRelativePath: "backend/dsc-backend",
+      binarySha256: digest("binary"),
       artifactProfile: "public-starter",
+      sourceFingerprint,
+      sourceCommit,
+      packagingFingerprint,
+      builtAt: "2026-08-21T00:00:00Z",
+      buildEnvironmentFingerprint: digest("environment"),
+      buildToolchainFingerprint,
+      dependencyLockSha256,
+      buildEnvironment: {
+        python: "3.13.7",
+        pythonImplementation: "CPython",
+        platform: "macOS-15-arm64",
+        packages: { pyinstaller: "6.15.0" },
+      },
+      minimumHost: { osFamily: "macOS", version: "15.0" },
+      runtimeComponents: [
+        { name: "python", version: "3.13.7" },
+        { name: "opengrep", version: "1.10.0" },
+      ],
+      nativeSigning: { status: "signed", method: "test", evidence: evidence("native-signing.json") },
+      sbom: evidence("darwin-arm64.spdx.json"),
+      provenance: evidence("darwin-arm64.provenance.json"),
       publicNpm: true,
       containsFullCore: false,
       containsPrivateAssets: false,
+      publicRuleIds,
+      starterRuleIds: publicRuleIds,
+      maxRulepackFiles: 1,
       ...overrides,
     }],
   };
   const manifestPath = path.join(workDir, "devseccode-core-artifacts.json");
   fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-  const { privateKey, publicKey } = crypto.generateKeyPairSync("ed25519");
-  const publicDer = publicKey.export({ type: "spki", format: "der" });
   const signature = crypto.sign(null, fs.readFileSync(manifestPath), privateKey);
   fs.writeFileSync(`${manifestPath}.sig`, `${JSON.stringify({
     algorithm: "ed25519",
-    keyId: `ed25519:${crypto.createHash("sha256").update(publicDer).digest("hex").slice(0, 16)}`,
+    keyId: signingKeyId,
     signature: signature.toString("base64"),
   }, null, 2)}\n`);
   const publicKeyPath = path.join(workDir, "artifact-ed25519-public.pem");

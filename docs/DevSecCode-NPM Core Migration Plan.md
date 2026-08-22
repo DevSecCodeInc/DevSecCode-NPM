@@ -31,14 +31,13 @@ They should not need a separate DevSecCode-Core checkout or manual backend insta
   - Reject archives containing full-Core payload markers, including `compliance_seeds`, private/premium/enterprise assets, model assets, SBOM/model bundles, or broad compliance/premium preset data.
   - Require Core's detached Ed25519 manifest signature and verify it against the vendor public key pinned in the parent NPM package before trusting any manifest field, filename, checksum, or archive.
   - Treat the compiled public-starter backend as inspectable public distribution. Compilation and packaging are not IP controls; Core's source/profile allowlist and release validator are the IP boundary.
-  - Keep the Core-approved initial matrix: `darwin-arm64`, `linux-x64`, `win32-x64`.
-  - Retain `linux-arm64` only as a private planned scaffold until Core publishes and validates that target.
+  - Keep the Core-approved NPM matrix: `darwin-arm64`, `linux-x64`, `linux-arm64`, `win32-x64`.
   - Do not add `darwin-x64` until Core artifact production and release validation exist for that target.
   - Remove stale `darwin-x64` publishing/build assumptions from release scripts while this target is unsupported.
 
 - Establish the runtime contract:
-  - NPM owns command parsing, help text, local UX, gamification, TUI, quests, profile, stats, and install ergonomics.
-  - Core owns scan execution, starter rulepack loading, finding normalization, and SARIF/JUnit/JSON exports where available for the public/starter NPM SKU.
+  - NPM owns command parsing, help text, local UX, gamification, quests, profile, stats, and install ergonomics.
+  - Core owns scan execution, starter rulepack loading, finding normalization, and SARIF export for the public/starter NPM SKU. NPM renders terminal, JSON, JSON Lines, and JUnit presentations from Core findings.
   - Full compliance mapping, full/private rulepacks, premium scanner logic, and scanner-bound model functionality remain private Core surfaces and must not be reachable through the public NPM artifact unless a future product decision explicitly creates a public capability for them.
   - Every Core-backed command must call `/v1/meta` first and verify only the capabilities required for that command before invoking deeper routes.
   - Deterministic scanning must not be blocked by missing optional LLM or compliance capabilities.
@@ -48,7 +47,7 @@ They should not need a separate DevSecCode-Core checkout or manual backend insta
   - The current public UX implementation lives in Python under `engine/src/dsc/gamification` and is currently shipped only because the PyInstaller CLI binary includes it.
   - Replacing platform packages with Core backend artifacts removes that runtime unless it is moved.
   - Decision: port the public NPM UX layer to Node/JS inside the parent `@devseccode/scanner` package, keeping Core interactions behind a small client adapter.
-  - Users must still install only `@devseccode/scanner`; any JS libraries needed for command parsing, terminal rendering, prompts, or TUI behavior must be normal parent-package dependencies.
+  - Users must still install only `@devseccode/scanner`; any JS libraries needed for command parsing, terminal rendering, or prompts must be normal parent-package dependencies.
   - Do not introduce a second user-installed package, postinstall download step, or manual Core/UX install path for the initial migration.
   - Update the parent package `files` allowlist so the published tarball includes all Node UX source files, templates, static text/assets, and package-local runtime data needed by `bin/dsc.js`.
   - Add every Node UX runtime dependency to the parent package manifest; do not rely on globally installed tools or source-tree-only dev dependencies.
@@ -56,7 +55,7 @@ They should not need a separate DevSecCode-Core checkout or manual backend insta
   - Do not claim parity for `hunt`, `map`, `play`, `watch`, `quests`, `stats`, `init`, or `ide` until the Node-owned UX runtime is packaged and tested from a fresh install.
 
 - Migrate command behavior:
-  - `scan`: call Core scan endpoints, render terminal output locally, render JSON/JSON Lines locally from `/v1/scan/{scanId}/results`, and use Core-backed SARIF/JUnit exports.
+  - `scan`: call Core scan endpoints, render terminal, JSON, JSON Lines, and JUnit locally from `/v1/scan/{scanId}/results`, and use Core-backed SARIF export.
   - `hunt`, `map`, `play`, `watch`: keep NPM-specific gamified UX, but feed it normalized Core findings instead of local scanner internals.
   - `list-rules`: use Core rule metadata.
   - `explain`: use Core rule/finding metadata; if Core lacks the needed detail route, record that as a Core API gap before claiming parity.
@@ -104,11 +103,11 @@ They should not need a separate DevSecCode-Core checkout or manual backend insta
     - `devseccode-core-artifacts.json` declares `artifactProfile: "public-starter"` and `publicNpm: true`.
     - The manifest declares a non-empty public/starter rule allowlist and rulepack file limit.
     - The manifest and archive do not declare or contain full/private Core payloads, full compliance mappings, model assets, premium scanner logic, private backend assets, or scanner-bound model bundles.
-    - `devseccode-core-artifacts.json` contains `darwin-arm64`, `linux-x64`, and `win32-x64`.
+    - `devseccode-core-artifacts.json` contains `darwin-arm64`, `linux-x64`, `linux-arm64`, and `win32-x64`.
     - Every referenced archive exists, matches `sha256` and `sizeBytes`, extracts safely, and contains the expected `dsc-backend` or `dsc-backend.exe`.
     - Generated Core manifests, signatures, and archives are never committed to this repository; release CI assembles them into package tarballs from an immutable signed Core handoff.
     - Each platform package tarball contains the expected Core manifest/archive layout and no old `dsc` PyInstaller CLI binary.
-    - Each platform package smoke test launches the public/starter backend, reads endpoint discovery, checks `/health`, authenticates to `/v1/meta`, runs a representative starter scan, and exports SARIF/JUnit where supported.
+    - Each platform package smoke test launches the public/starter backend, reads endpoint discovery, checks `/health`, authenticates to `/v1/meta`, runs a representative starter scan, obtains SARIF from Core, and renders JUnit from the returned Core findings.
 
 ## Public NPM Artifact Boundary
 
@@ -140,7 +139,7 @@ specific `requiredCapabilities`.
 |---|---|---|
 | `scan --format terminal/json/json-lines` | `scan.workspace` | `llm.*`, `compliance.*`, `dependencies.*` |
 | `scan --format sarif` | `scan.workspace`, `scan.export.sarif` | `llm.*`, `compliance.*` |
-| `scan --format junit` | `scan.workspace`, `scan.export.junit` | `llm.*`, `compliance.*` |
+| `scan --format junit` | `scan.workspace`; NPM renders JUnit from Core findings | `llm.*`, `compliance.*` |
 | `hunt`, `map`, `play`, `watch` | `scan.workspace` | `llm.*`, `compliance.*`, richer explain/fix metadata |
 | `list-rules` | `rules.list` | none |
 | `explain` | `rules.list` plus any future Core detail capability if added | LLM explanation only if a future command explicitly enables it |
@@ -154,7 +153,7 @@ only require deterministic scanning or rule metadata.
 1. **Baseline and contract inventory**
    - Capture golden outputs and exit codes for the existing package before edits.
    - Inventory every current product import from `dsc.scanner`, `dsc.engine`, and `dsc.formatters`, including gamification modules.
-   - Confirm the Node/JS parent-package UX runtime scope and identify the JS libraries needed to replace the Python CLI/gamification/TUI surfaces.
+   - Confirm the Node/JS parent-package UX runtime scope and identify the JS libraries needed to replace the Python CLI and gamification surfaces.
    - Confirm Core supports every scan/config field required for NPM parity, especially language filtering and detector include/exclude lists.
 
 2. **Core launcher and artifact packaging**
@@ -247,7 +246,7 @@ only require deterministic scanning or rule metadata.
   - Confirm no DevSecCode-Core source checkout is present.
   - Run bare command, scan, hunt, map, list-rules, explain, version, and init flows.
   - Confirm the launched backend responds to `/health` and `/v1/meta`.
-  - Confirm JSON/JSON Lines output comes from normalized Core results and SARIF/JUnit output comes from Core export routes.
+  - Confirm terminal, JSON, JSON Lines, and JUnit output comes from normalized Core results and SARIF comes from the Core export route.
   - Start `watch` against a temp project, modify one file, observe one rescan, then terminate the process cleanly within a fixed timeout.
   - Run a fresh-install hunt with `DEVSECCODE_HOME=<temp-dir>` and confirm profile/report/triage files are created or preserved with the expected schemas.
 
@@ -277,10 +276,10 @@ only require deterministic scanning or rule metadata.
   - Validate Linux packages on glibc environments; do not claim Alpine/musl support unless a separate artifact and smoke path exist.
 
 - Post-publish release acceptance:
-  - Publish the migrated release first under a prerelease version or non-`latest` dist-tag such as `core-migration-canary`.
-  - From a clean environment with no npm auth, run `npx --yes @devseccode/scanner@core-migration-canary --version`.
-  - From a clean environment with no npm auth, run `npx --yes @devseccode/scanner@core-migration-canary scan <sample-project> --format terminal`.
-  - Run `npm install -g @devseccode/scanner@core-migration-canary`, then `devseccode --version`, `devseccode hunt <sample-project> --no-explore`, and `devseccode scan <sample-project> --format sarif --output results.sarif`.
+  - Publish the exact candidate bytes first under the non-`latest` dist-tag `artifact-v2-candidate`.
+  - From a clean environment with no npm auth, run `npx --yes @devseccode/scanner@artifact-v2-candidate --version`.
+  - From a clean environment with no npm auth, run `npx --yes @devseccode/scanner@artifact-v2-candidate scan "$HOME/juice-shop" --format terminal`.
+  - Run `npm install -g @devseccode/scanner@artifact-v2-candidate`, then `devseccode --version`, `devseccode hunt "$HOME/juice-shop" --no-explore`, and `devseccode scan "$HOME/juice-shop" --format sarif --output "$HOME/deva-results.sarif"`.
   - Confirm npmjs package visibility is public and no private registry or npm login is required.
   - Confirm only the matching platform optional package installed and the installed size matches a single platform artifact.
   - On macOS, verify signing/notarization expectations for the shipped Core backend artifact.
@@ -289,7 +288,7 @@ only require deterministic scanning or rule metadata.
 ## Completion Criteria
 
 - A user can install only `@devseccode/scanner` and run scans without separately installing DevSecCode-Core.
-- NPM command UX remains intact, including gamification and TUI behavior.
+- NPM command UX remains intact, including the gamified hunt, profile, quest, achievement, streak, and score behavior.
 - Public starter scanner execution and export generation flow through Core `/v1/*` routes as appropriate.
 - Full compliance mapping, LLM-capable scanner behavior, private rulepacks, and premium Core functionality remain outside the public NPM artifact.
 - NPM no longer vendors or imports scanner/compliance/LLM internals for product execution.

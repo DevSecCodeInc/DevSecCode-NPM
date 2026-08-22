@@ -20,8 +20,8 @@ public/starter artifact automatically; your source code stays on your machine.
   HTTP, XXE, and CSRF — across Python, JavaScript / TypeScript, Go,
   Java, and Rust.
 - **Infrastructure scanning** for Dockerfiles and Kubernetes manifests.
-- **Gamified TUI** (`hunt`) — a scan map, encounter cards, and a triage
-  flow designed to be run more than once.
+- **Gamified hunts** — XP, levels, achievements, streaks, quests, and shield
+  scores designed to make repeated scanning useful.
 - **Standard outputs** — SARIF (for GitHub Code Scanning), JUnit (for
   CI test runners), JSON (for downstream tooling), and a colorized
   terminal report.
@@ -90,10 +90,11 @@ matches your machine; the rest are skipped by the `os` / `cpu` fields.
 | ------------------------------------- | --------------------------------------- |
 | macOS Apple Silicon (`darwin-arm64`)  | `@devseccode/scanner-darwin-arm64`      |
 | Linux x64                             | `@devseccode/scanner-linux-x64`         |
+| Linux arm64                           | `@devseccode/scanner-linux-arm64`       |
 | Windows x64                           | `@devseccode/scanner-win32-x64`         |
 
-Linux arm64 and Intel Mac (`darwin-x64`) are planned expansion targets and are
-not published in this release. Alpine / musl Linux is not supported; run from a
+Intel Mac (`darwin-x64`) is a planned expansion target and is not published in
+this release. Alpine / musl Linux is not supported; run from a
 Debian or Ubuntu sidecar in CI.
 
 ## Privacy
@@ -116,7 +117,7 @@ remediation workflows.
 ## Repository
 
 Source, issue tracker, and changelog:
-[github.com/DevSecCode/DevSecCode-NPM](https://github.com/DevSecCode/DevSecCode-NPM)
+[github.com/DevSecCodeInc/DevSecCode-NPM](https://github.com/DevSecCodeInc/DevSecCode-NPM)
 
 ## License
 

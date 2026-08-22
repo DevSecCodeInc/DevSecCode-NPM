@@ -10,7 +10,7 @@ const {
 } = require("../packages/scanner/lib/artifact-trust");
 
 const REQUIRED_PROFILE = "public-starter";
-const REQUIRED_SCHEMA = "devseccode-core-artifacts/v1";
+const REQUIRED_SCHEMA = "devseccode-core-artifacts/v2";
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_PUBLIC_RULEPACK_FILES = 32;
 
@@ -189,6 +189,26 @@ function main() {
   const artifact = (manifest.artifacts || []).find((item) => item.target === target);
   if (!artifact) die(`target ${target} missing from artifact manifest`);
   validateMetadata(manifest, artifact, target);
+  let launcher;
+  try {
+    launcher = require(path.resolve(
+      __dirname,
+      "../packages/scanner/node_modules/@devseccode/core-launcher",
+    ));
+  } catch (err) {
+    die(`@devseccode/core-launcher is required for artifact-v2 validation: ${err.message}`);
+  }
+  try {
+    launcher.verifyArtifactArchive({
+      artifactRoot,
+      manifestPath,
+      publicKeyPath,
+      target,
+      requiredArtifactProfile: REQUIRED_PROFILE,
+    });
+  } catch (err) {
+    die(err.message);
+  }
   validateArchive(artifactRoot, manifest, artifact, target);
 }
 

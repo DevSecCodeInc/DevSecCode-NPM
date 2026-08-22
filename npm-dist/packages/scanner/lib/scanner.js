@@ -11,7 +11,7 @@ const {
 } = require("./config");
 const { commandCapabilities, coreRequest, ensureCoreForCommand, fetchCoreText } = require("./core");
 const { applySeverityOverrides, normalizeScanResult } = require("./results");
-const { formatJson, formatTerminal } = require("./renderers");
+const { formatJson, formatJunit, formatTerminal } = require("./renderers");
 const { meetsSeverity, normalizeSeverity } = require("./severity");
 
 function sleep(ms) {
@@ -119,7 +119,8 @@ async function formatScanOutput(format, scanContext, args) {
   const { connection, result, scanIds } = scanContext;
   if (format === "terminal") return formatTerminal(result, { verbose: args.verbose });
   if (format === "json") return formatJson(result, { jsonLines: args.jsonLines });
-  if (format === "sarif" || format === "junit") {
+  if (format === "junit") return formatJunit(result);
+  if (format === "sarif") {
     if (scanIds.length > 1) {
       const err = new Error(`${format} export currently supports one scan target at a time`);
       err.exitCode = 2;

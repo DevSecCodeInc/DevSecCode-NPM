@@ -1,15 +1,15 @@
 {
   "name": "@devseccode/scanner-linux-x64",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0",
   "description": "Packaged DevSecCode Core backend artifact for linux-x64 (glibc). Installed automatically by @devseccode/scanner on x86_64 Linux.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DevSecCode/DevSecCode-NPM.git",
+    "url": "git+https://github.com/DevSecCodeInc/DevSecCode-NPM.git",
     "directory": "npm-dist/packages/scanner-linux-x64"
   },
-  "homepage": "https://github.com/DevSecCode/DevSecCode-NPM#readme",
+  "homepage": "https://github.com/DevSecCodeInc/DevSecCode-NPM#readme",
   "files": [
     "artifacts/",
     "README.md",

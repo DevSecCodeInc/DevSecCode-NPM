@@ -2,34 +2,49 @@ name: NPM CI
 
 on:
   pull_request:
-  push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
+    strategy:
+      fail-fast: true
+      matrix:
+        node: [22, 24]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version: ${{ matrix.node }}
+
+      - name: Install exact Core launcher
+        run: |
+          npm install \
+            --prefix npm-dist/packages/scanner \
+            --package-lock=false \
+            --ignore-scripts \
+            --no-audit \
+            --no-fund \
+            --omit=optional
 
       - name: Verify source tree and package versions
         shell: bash
         run: |
           bash -n npm-dist/scripts/*.sh
           python3 -m py_compile npm-dist/scripts/extract-core-artifact-bundle.py
+          for script in npm-dist/scripts/*.mjs; do node --check "$script"; done
           if git ls-files 'npm-dist/packages/scanner-*/artifacts/*' | grep -v '/.gitkeep$' | grep -q .; then
             echo "::error::Generated Core payloads must not be committed."
             exit 1
           fi
           node - <<'JS'
           const fs = require("node:fs");
-          const targets = ["darwin-arm64", "linux-x64", "win32-x64"];
+          const targets = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
           const parent = JSON.parse(fs.readFileSync("npm-dist/packages/scanner/package.json", "utf8"));
           for (const target of targets) {
             const name = `@devseccode/scanner-${target}`;

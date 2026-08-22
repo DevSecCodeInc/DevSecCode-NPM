@@ -6,11 +6,15 @@ const path = require("node:path");
 const pkg = require("../package.json");
 
 const { statePath } = require("./state");
-const { verifyManifestSignature } = require("./artifact-trust");
+const {
+  TRUSTED_ARTIFACT_PUBLIC_KEY,
+  verifyManifestSignature,
+} = require("./artifact-trust");
 
 const SUPPORTED_TARGETS = Object.freeze([
   "darwin-arm64",
   "linux-x64",
+  "linux-arm64",
   "win32-x64",
 ]);
 
@@ -91,12 +95,19 @@ function copyFileAtomic(source, destination) {
   }
 }
 
-function materializeVerifiedArtifact(source, target, launcher = loadLauncher(), publicKeyPath) {
+function materializeVerifiedArtifact(
+  source,
+  target,
+  launcher = loadLauncher(),
+  publicKeyPath = TRUSTED_ARTIFACT_PUBLIC_KEY,
+) {
   verifyManifestSignature(source.manifestPath, publicKeyPath);
   const verified = launcher.verifyArtifactArchive({
     artifactRoot: source.artifactRoot,
     manifestPath: source.manifestPath,
+    publicKeyPath,
     target,
+    requiredArtifactProfile: "public-starter",
   });
   const digest = verified.artifact.sha256;
   if (!/^[a-f0-9]{64}$/.test(digest)) {
@@ -120,14 +131,18 @@ function materializeVerifiedArtifact(source, target, launcher = loadLauncher(), 
     artifact = launcher.resolveArtifact({
       artifactRoot: cacheRoot,
       manifestPath: cachedManifest,
+      publicKeyPath,
       target,
+      requiredArtifactProfile: "public-starter",
       verifyArchive: true,
     });
   } catch (_) {
     artifact = launcher.extractArtifactArchive({
       artifactRoot: cacheRoot,
       manifestPath: cachedManifest,
+      publicKeyPath,
       target,
+      requiredArtifactProfile: "public-starter",
       verifyArchive: true,
     });
   }
@@ -174,6 +189,8 @@ async function ensureCoreForCommand(requiredCapabilities, options = {}) {
     const connection = await launcher.ensureCore({
       binaryPath: artifact.binaryPath,
       endpointFile,
+      expectedEngineVersion: artifact.engineVersion,
+      requiredArtifactProfile: "public-starter",
       requiredCapabilities,
       startArgs: await startArgsForCore(options),
       timeoutMs: options.timeoutMs || 20000,
@@ -221,7 +238,7 @@ async function fetchCoreText(connection, route) {
 
 function commandCapabilities(command, format) {
   if (command === "scan" && format === "sarif") return ["scan.workspace", "scan.export.sarif"];
-  if (command === "scan" && format === "junit") return ["scan.workspace", "scan.export.junit"];
+  if (command === "scan" && format === "junit") return ["scan.workspace"];
   if (command === "scan") return ["scan.workspace"];
   if (command === "hunt" || command === "map" || command === "watch" || command === "play") {
     return ["scan.workspace"];

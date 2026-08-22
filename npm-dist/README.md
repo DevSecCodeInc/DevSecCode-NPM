@@ -1,5 +1,8 @@
 # npm distribution -- `@devseccode/scanner`
 
+Release operators start with
+[`docs/npm-artifact-v2-release-runbook.md`](../docs/npm-artifact-v2-release-runbook.md).
+
 This directory holds the npm side of the public DevSecCode CLI. Users install
 one package (`@devseccode/scanner`), run `devseccode hunt .`, and npm
 auto-resolves the right platform-specific public/starter Core artifact from a
@@ -14,7 +17,7 @@ npm-dist/
 │   ├── scanner/                    ← @devseccode/scanner (Node CLI/UX)
 │   ├── scanner-darwin-arm64/       ← public/starter Core artifact package
 │   ├── scanner-linux-x64/
-│   ├── scanner-linux-arm64/        ← private scaffold for planned support
+│   ├── scanner-linux-arm64/
 │   └── scanner-win32-x64/
 └── scripts/
     ├── version.sh              ← echoes parent npm wrapper version
@@ -49,8 +52,8 @@ inspectable, the Core public-starter profile—not compilation—is the IP bound
 
 NPM's migration target is Core's
 [`artifact-v2 downstream product contract`](https://github.com/DevSecCodeInc/DevSecCode-Core/blob/main/docs/distribution/artifact-v2-downstream-contract.md).
-This section describes the intended contract and does not claim that NPM is
-already connected to artifact-v2.
+The `0.5.0` candidate implementation uses this contract. Production remains on
+`0.4.5` until the candidate and four-platform registry acceptance gates pass.
 
 NPM consumes only a signed `devseccode-core-artifacts/v2` `public-starter`
 matrix through `@devseccode/core-launcher` and the shared validator. Each
@@ -66,14 +69,21 @@ requirement. NPM owns command parsing, terminal presentation, JavaScript APIs,
 profiles, quests, achievements, publishing order, canary validation, and
 promotion. Scanner evidence comes from public-starter Core through `/v1`.
 
-## Building Locally
+## Reproducing the candidate locally
 
 ```bash
-CORE_ARTIFACT_DIR=/path/to/core-release-artifacts
-bash npm-dist/scripts/assemble-platform-pkg.sh darwin-arm64 "$CORE_ARTIFACT_DIR"
-bash npm-dist/scripts/assemble-platform-pkg.sh linux-x64 "$CORE_ARTIFACT_DIR"
-bash npm-dist/scripts/assemble-platform-pkg.sh win32-x64 "$CORE_ARTIFACT_DIR"
-DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" bash npm-dist/scripts/test-local-install.sh
+CORE_ARTIFACT_DIR="$(mktemp -d)"
+printf 'Accepted hardened Core source commit: '
+IFS= read -r CORE_REF
+printf 'Accepted hardened Core candidate ID: '
+IFS= read -r CORE_CANDIDATE_ID
+node npm-dist/scripts/download-public-core-candidate.mjs \
+  "$CORE_ARTIFACT_DIR" \
+  0.3.6 \
+  "$CORE_REF" \
+  "$CORE_CANDIDATE_ID"
+DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
+  bash npm-dist/scripts/test-local-install.sh
 ```
 
 ## Things to Know
@@ -84,16 +94,17 @@ DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" bash npm-dist/scripts/test-local-inst
 - **NPM owns UX.** Command parsing, local output rendering, profile state,
   quests, and the gamified hunt layer live in the parent package.
 - **Core owns public starter scanning.** Workspace scans, public rule metadata,
-  and SARIF/JUnit exports flow through authenticated `/v1/*` routes. Full
+  and SARIF export flow through authenticated `/v1/*` routes. JUnit is a local
+  NPM presentation of Core findings. Full
   Core rulepacks, compliance mappings, model assets, and premium scanner logic
   are not shipped in public npm packages.
 - **No postinstall.** Install is file extraction only. No download step, shell
   hook, or node-gyp.
 - **Alpine / musl Linux is not supported.** Use a glibc image such as Debian
   or Ubuntu in CI.
-- **Linux arm64 is planned, not published.** The private package scaffold is
-  retained so it can be activated only after Core adds a signed, accepted
-  `public-starter` target.
+- **Linux arm64 is a supported candidate target.** It receives the same signed,
+  accepted `public-starter` artifact contract and release gates as the other
+  platform packages.
 
 See [`DevSecCode-NPM Core Migration Plan.md`](../docs/DevSecCode-NPM%20Core%20Migration%20Plan.md)
 for the migration contract and release gates.

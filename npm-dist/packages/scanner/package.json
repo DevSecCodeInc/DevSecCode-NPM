@@ -1,18 +1,18 @@
 {
   "name": "@devseccode/scanner",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0",
   "description": "Gamified local security CLI for hunting common code vulnerabilities from npm.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DevSecCode/DevSecCode-NPM.git",
+    "url": "git+https://github.com/DevSecCodeInc/DevSecCode-NPM.git",
     "directory": "npm-dist/packages/scanner"
   },
   "bugs": {
-    "url": "https://github.com/DevSecCode/DevSecCode-NPM/issues"
+    "url": "https://github.com/DevSecCodeInc/DevSecCode-NPM/issues"
   },
-  "homepage": "https://github.com/DevSecCode/DevSecCode-NPM#readme",
+  "homepage": "https://github.com/DevSecCodeInc/DevSecCode-NPM#readme",
   "keywords": [
     "security",
     "sast",
@@ -38,18 +38,19 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": "^22.0.0 || ^24.0.0"
   },
   "dependencies": {
-    "@devseccode/core-launcher": "0.1.1"
+    "@devseccode/core-launcher": "0.6.0"
   },
   "scripts": {
     "test": "node --test"
   },
   "optionalDependencies": {
-    "@devseccode/scanner-darwin-arm64": "0.5.0-beta.1",
-    "@devseccode/scanner-linux-x64": "0.5.0-beta.1",
-    "@devseccode/scanner-win32-x64": "0.5.0-beta.1"
+    "@devseccode/scanner-darwin-arm64": "0.5.0",
+    "@devseccode/scanner-linux-x64": "0.5.0",
+    "@devseccode/scanner-linux-arm64": "0.5.0",
+    "@devseccode/scanner-win32-x64": "0.5.0"
   },
   "publishConfig": {
     "access": "public"

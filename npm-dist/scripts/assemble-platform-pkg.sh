@@ -8,7 +8,7 @@
 # Usage:
 #   bash npm-dist/scripts/assemble-platform-pkg.sh <target> <core-artifact-dir>
 #
-# Where <target> is one of darwin-arm64, linux-x64, win32-x64.
+# Where <target> is one of darwin-arm64, linux-x64, linux-arm64, win32-x64.
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ TARGET="$1"
 CORE_ARTIFACT_DIR="$2"
 
 case "$TARGET" in
-  darwin-arm64|linux-x64|win32-x64) ;;
+  darwin-arm64|linux-x64|linux-arm64|win32-x64) ;;
   *) echo "assemble-platform-pkg: unknown or unsupported target '$TARGET'" >&2; exit 2 ;;
 esac
 
@@ -93,8 +93,10 @@ if (hash !== artifact.sha256) {
 JS
 
 TMP_EXTRACT="$(mktemp -d)"
+LOCAL_PATH_REPORT="${TMP_EXTRACT}.local-path-report.txt"
 cleanup_extract() {
   rm -rf "$TMP_EXTRACT"
+  rm -f "$LOCAL_PATH_REPORT"
 }
 trap cleanup_extract EXIT
 
@@ -104,15 +106,24 @@ if [[ ! -f "$TMP_EXTRACT/$BINARY_RELATIVE_PATH" ]]; then
   exit 1
 fi
 
-LOCAL_PATH_REPORT="$TMP_EXTRACT/local-path-report.txt"
-if grep -R -a -n -E '/Users/[^/[:space:][:cntrl:]]+/(Projects|projects|src|code)/|/home/[^/[:space:][:cntrl:]]+/(work|Projects|projects|src|code)/|DevSecCode-Core|DevSecCode-Scanner' "$TMP_EXTRACT" >"$LOCAL_PATH_REPORT" 2>/dev/null; then
+set +e
+rg --text --line-number --only-matching --no-heading --color never \
+  '/Users/[^/[:space:][:cntrl:]]+/(Projects|projects)/(dsc|DevSecCode[^/[:space:][:cntrl:]]*)|/home/[^/[:space:][:cntrl:]]+/(work|Projects|projects)/(dsc|DevSecCode[^/[:space:][:cntrl:]]*)|DevSecCode-Core|DevSecCode-Scanner' \
+  "$TMP_EXTRACT" >"$LOCAL_PATH_REPORT" 2>/dev/null
+LOCAL_PATH_STATUS=$?
+set -e
+if [[ "$LOCAL_PATH_STATUS" -eq 0 ]]; then
   echo "assemble-platform-pkg: public/starter Core artifact contains local checkout paths; refusing to package it" >&2
   sed -n '1,20p' "$LOCAL_PATH_REPORT" >&2
   exit 1
 fi
+if [[ "$LOCAL_PATH_STATUS" -ne 1 ]]; then
+  echo "assemble-platform-pkg: local checkout path audit failed" >&2
+  exit 1
+fi
 
-rm -rf "$PKG_DIR/artifacts"
 mkdir -p "$PKG_DIR/artifacts"
+find "$PKG_DIR/artifacts" -depth -mindepth 1 ! -name .gitkeep -delete
 cp "$MANIFEST" "$PKG_DIR/artifacts/devseccode-core-artifacts.json"
 cp "$SIGNATURE" "$PKG_DIR/artifacts/devseccode-core-artifacts.json.sig"
 cp "$ARCHIVE_SRC" "$PKG_DIR/artifacts/$ARCHIVE_NAME"

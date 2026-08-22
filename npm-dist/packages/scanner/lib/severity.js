@@ -7,8 +7,18 @@ const ORDER = Object.freeze({
   high: 3,
   critical: 4,
 });
+const CORE_NUMERIC_SEVERITY = Object.freeze({
+  10: "info",
+  20: "low",
+  30: "medium",
+  40: "high",
+  50: "critical",
+});
 
 function normalizeSeverity(value, fallback = "info") {
+  if (typeof value === "number" && Object.prototype.hasOwnProperty.call(CORE_NUMERIC_SEVERITY, value)) {
+    return CORE_NUMERIC_SEVERITY[value];
+  }
   const key = String(value || fallback).trim().toLowerCase();
   if (Object.prototype.hasOwnProperty.call(ORDER, key)) {
     return key;

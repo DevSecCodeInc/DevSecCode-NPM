@@ -1,5 +1,8 @@
 # Testing the npm distribution
 
+The release commands and gates are at the top-level runbook:
+`docs/npm-artifact-v2-release-runbook.md`.
+
 Two distinct "clean install as a new user" tests exist for this repo, one
 **before** you publish and one **after**. They answer different questions
 and you should run both.
@@ -18,7 +21,17 @@ The 90% test. Run this every time you touch the Node CLI, public/starter Core ar
 assembly, or package metadata.
 
 ```bash
-DSC_CORE_ARTIFACT_DIR=/path/to/core-public-starter-artifacts \
+CORE_ARTIFACT_DIR="$(mktemp -d)"
+printf 'Accepted hardened Core source commit: '
+IFS= read -r CORE_REF
+printf 'Accepted hardened Core candidate ID: '
+IFS= read -r CORE_CANDIDATE_ID
+node npm-dist/scripts/download-public-core-candidate.mjs \
+  "$CORE_ARTIFACT_DIR" \
+  0.3.6 \
+  "$CORE_REF" \
+  "$CORE_CANDIDATE_ID"
+DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
   bash npm-dist/scripts/test-local-install.sh
 ```
 
@@ -46,7 +59,17 @@ Spins up a [Verdaccio](https://verdaccio.org/) registry on
 no tarball paths — exactly the command a customer will run.
 
 ```bash
-DSC_CORE_ARTIFACT_DIR=/path/to/core-public-starter-artifacts \
+CORE_ARTIFACT_DIR="$(mktemp -d)"
+printf 'Accepted hardened Core source commit: '
+IFS= read -r CORE_REF
+printf 'Accepted hardened Core candidate ID: '
+IFS= read -r CORE_CANDIDATE_ID
+node npm-dist/scripts/download-public-core-candidate.mjs \
+  "$CORE_ARTIFACT_DIR" \
+  0.3.6 \
+  "$CORE_REF" \
+  "$CORE_CANDIDATE_ID"
+DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
   bash npm-dist/scripts/test-with-verdaccio.sh
 ```
 
@@ -75,51 +98,38 @@ Differences from real publish:
 
 ## Post-publish: actual new-user test
 
-After `git push origin npm-vX.Y.Z` succeeds and the release workflow shows
-green, do this on a machine where you have **never** authenticated to npm --
-ideally a fresh VM, a clean Docker container, or at minimum a different user
-account on your laptop. The public package should install without login.
+After the candidate-publication workflow passes, run the repository helper.
+It creates an isolated npm prefix, home, configuration, and DevSecCode state;
+removes npm and GitHub credentials from the child environment; exercises both
+`npx` and a global installation; verifies the exact platform package; starts
+Core; scans; and runs a hunt.
+
+macOS or Linux:
 
 ```bash
-# In a brand new directory, with no ~/.npmrc:
-mkdir /tmp/dsc-realworld && cd /tmp/dsc-realworld
-
-# 1. Try npx -- the canonical first-time invocation.
-npx --yes @devseccode/scanner@core-migration-canary --version
-npx --yes @devseccode/scanner@core-migration-canary scan . --format terminal
-
-# 2. And the global install path.
-npm install -g @devseccode/scanner@core-migration-canary
-devseccode --version
-devseccode hunt /path/to/a/real/project
-devseccode scan /path/to/a/real/project --format terminal
-
-# 3. (macOS only) Verify the packaged Core backend is signed by the right entity.
-CORE_BACKEND="$(find "$(npm root -g)/@devseccode/scanner-darwin-arm64" -path '*/dsc-backend' -type f | head -n1)"
-codesign -dvvv "$CORE_BACKEND" 2>&1 | grep -E 'Authority|TeamIdentifier'
-# Expect:
-#   Authority=Developer ID Application: Summit Wanderlust, LLC (S4X2KJ3UYL)
-#   Authority=Developer ID Certification Authority
-#   Authority=Apple Root CA
-#   TeamIdentifier=S4X2KJ3UYL
-#
-# Notarization is recorded for the Core backend artifact before npm assembly.
-
-# 4. Check install size on disk.
-du -sh "$(npm root -g)/@devseccode/"
-# Expect: one parent package plus one platform artifact package.
-
-# 6. Confirm only the right platform package was installed.
-ls "$(npm root -g)/@devseccode/"
-# Expect: scanner, scanner-<your-platform>  (and nothing else)
+node npm-dist/scripts/candidate-platform-test.mjs start-registry
+node npm-dist/scripts/candidate-platform-test.mjs cleanup
 ```
+
+Windows PowerShell:
+
+```powershell
+node .\npm-dist\scripts\candidate-platform-test.mjs start-registry
+node .\npm-dist\scripts\candidate-platform-test.mjs cleanup
+```
+
+Success reports `Candidate 0.5.0 passed isolated` followed by exactly one of
+`darwin-arm64`, `linux-x64`, `linux-arm64`, or `win32-x64`. The installed scope contains the
+parent scanner, Core launcher, and exactly one matching scanner platform
+package. The cleanup command verifies npm uninstall behavior before removing
+the isolated test directory.
 
 Failure signals that map to common bugs:
 
 | Symptom | Likely cause |
 |---|---|
 | `npm install` fails with 403 | The package is not public on npm or the registry is pointed at a private mirror. Check npm package visibility and `.npmrc`. |
-| `devseccode: command not found` after global install | npm `bin` directory not on `PATH`. Run `npm prefix -g` and add `<that>/bin` to `PATH`. |
+| `devseccode: command not found` after global install | npm's global executable directory is not on `PATH`; inspect it with `npm prefix -g`. |
 | `devseccode --version` says "no Core artifact package for ..." | The customer's platform/arch pair isn't in `optionalDependencies` or its public/starter sub-package wasn't published. |
 | `devseccode: cannot be opened because the developer cannot be verified` (macOS) | The Core backend artifact was not signed/notarized before npm assembly. |
 | Install size is much larger than one platform artifact | All platform artifacts got installed instead of just one. Check that each platform `package.json` has the correct `os` / `cpu` fields. |
@@ -127,8 +137,8 @@ Failure signals that map to common bugs:
 ## Cleaning up between runs
 
 ```bash
-# Delete assembled artifacts for one platform so the next test reassembles:
-rm -rf npm-dist/packages/scanner-darwin-arm64/artifacts/*      # adjust target
+# Generated artifact payloads are ignored and replaced by the assembly script.
+git status --short
 ```
 
 ## Continuous integration
@@ -136,6 +146,6 @@ rm -rf npm-dist/packages/scanner-darwin-arm64/artifacts/*      # adjust target
 The release workflow should run artifact admission checks before publish:
 manifest target coverage, checksum/size validation, safe extraction,
 Ed25519 signature verification, backend launch, `/health`, authenticated `/v1/meta`, a representative scan,
-and SARIF/JUnit export. Publish the migrated npm release under a canary
-dist-tag first, then promote only after no-auth `npx` and global-install
-smokes pass.
+Core-backed SARIF export, and local JUnit rendering from Core findings. Publish
+the exact migrated npm candidate under `artifact-v2-candidate`, then promote
+the same bytes only after no-auth `npx` and global-install smokes pass.

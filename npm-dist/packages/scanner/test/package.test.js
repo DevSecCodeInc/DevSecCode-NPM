@@ -25,12 +25,14 @@ test("parent package ships the Node UX runtime", () => {
   assert.ok(pkg.files.includes("bin/"));
   assert.ok(pkg.files.includes("lib/"));
   assert.ok(pkg.files.includes("trust/"));
-  assert.equal(pkg.dependencies["@devseccode/core-launcher"], "0.1.1");
+  assert.equal(pkg.dependencies["@devseccode/core-launcher"], "0.6.0");
+  assert.equal(pkg.engines.node, "^22.0.0 || ^24.0.0");
 });
 
 test("capability requirements are per command", () => {
   assert.deepEqual(commandCapabilities("scan", "terminal"), ["scan.workspace"]);
   assert.deepEqual(commandCapabilities("scan", "sarif"), ["scan.workspace", "scan.export.sarif"]);
+  assert.deepEqual(commandCapabilities("scan", "junit"), ["scan.workspace"]);
   assert.deepEqual(commandCapabilities("list-rules"), ["rules.list"]);
 });
 
@@ -44,10 +46,14 @@ test("optional dependency matrix matches supported targets", () => {
   }
 });
 
-test("planned linux-arm64 package cannot be published", () => {
-  const planned = require("../../scanner-linux-arm64/package.json");
-  assert.equal(planned.private, true);
-  assert.ok(!pkg.optionalDependencies[planned.name]);
+test("linux-arm64 platform package is aligned and publishable", () => {
+  const platform = require("../../scanner-linux-arm64/package.json");
+  assert.equal(platform.private, undefined);
+  assert.equal(platform.version, pkg.version);
+  assert.equal(pkg.optionalDependencies[platform.name], pkg.version);
+  assert.deepEqual(platform.os, ["linux"]);
+  assert.deepEqual(platform.cpu, ["arm64"]);
+  assert.equal(platform.publishConfig.access, "public");
 });
 
 test("Core endpoint discovery stays inside the package state root", () => {
@@ -79,7 +85,11 @@ test("verified Core artifacts materialize into user state, not the installed pac
   const digest = crypto.createHash("sha256").update(fs.readFileSync(archive)).digest("hex");
   const manifestPath = path.join(sourceRoot, "devseccode-core-artifacts.json");
   fs.writeFileSync(manifestPath, `${JSON.stringify({
-    schemaVersion: "devseccode-core-artifacts/v1",
+    schemaVersion: "devseccode-core-artifacts/v2",
+    artifactProfile: "public-starter",
+    publicNpm: true,
+    containsFullCore: false,
+    containsPrivateAssets: false,
     artifacts: [{
       target: "darwin-arm64",
       filename: "core.tar.gz",
