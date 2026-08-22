@@ -58,7 +58,8 @@ workflow has no stale default for either value.
   Core launcher release workflow.
 - The NPM repository `npm` environment exists.
 - Each of `@devseccode/scanner`, `@devseccode/scanner-darwin-arm64`,
-  `@devseccode/scanner-linux-x64`, and `@devseccode/scanner-win32-x64` has an
+  `@devseccode/scanner-linux-x64`, `@devseccode/scanner-linux-arm64`, and
+  `@devseccode/scanner-win32-x64` has an
   npm Trusted Publisher for organization `DevSecCodeInc`, repository
   `DevSecCode-NPM`, workflow `promote-npm.yml`, and environment `npm`.
 - The `npm` environment has no `NPM_TOKEN` requirement. Candidate publication
@@ -93,7 +94,7 @@ gh workflow run release-npm.yml \
 ```
 
 Success means the workflow downloaded the real public R2 candidate, verified
-the signed v2 manifest and public-only boundary, assembled all three platform
+the signed v2 manifest and public-only boundary, assembled all four platform
 packages, audited the exact packed tarballs for unapproved source and payload
 files, passed the unit suite, exercised the exact private tarballs on Linux
 x64, macOS ARM64, and Windows x64, and uploaded
@@ -144,13 +145,14 @@ described above is complete and the operator has authorized npm publication.
 Trusted Publishing authenticates package publication. Moving `latest` is an
 interactive npm operation because it changes only dist-tags and must not
 depend on a long-lived automation token. After the publication workflow and
-all three registry acceptance jobs succeed, run:
+all four registry acceptance jobs succeed, run:
 
 ```bash
 npm login
 for package in \
   @devseccode/scanner-darwin-arm64 \
   @devseccode/scanner-linux-x64 \
+  @devseccode/scanner-linux-arm64 \
   @devseccode/scanner-win32-x64 \
   @devseccode/scanner
 do
@@ -160,7 +162,7 @@ done
 ```
 
 Complete npm's interactive authentication or one-time-password prompt if it
-appears. These commands move `latest` for the three platform packages first
+appears. These commands move `latest` for the four platform packages first
 and the parent package last. They do not rebuild or republish bytes.
 
 ## 4. Confirm and tag
@@ -170,6 +172,7 @@ npm view @devseccode/scanner dist-tags --json
 npm view @devseccode/scanner@0.5.0 version
 npm view @devseccode/scanner-darwin-arm64@0.5.0 version
 npm view @devseccode/scanner-linux-x64@0.5.0 version
+npm view @devseccode/scanner-linux-arm64@0.5.0 version
 npm view @devseccode/scanner-win32-x64@0.5.0 version
 ```
 

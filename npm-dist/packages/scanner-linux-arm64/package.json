@@ -1,8 +1,7 @@
 {
   "name": "@devseccode/scanner-linux-arm64",
   "version": "0.5.0",
-  "private": true,
-  "description": "Reserved package scaffold for planned linux-arm64 support. Not published or installed until Core promotes this target.",
+  "description": "Packaged DevSecCode Core backend artifact for linux-arm64 (glibc). Installed automatically by @devseccode/scanner on ARM64 Linux.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
   "repository": {
@@ -21,5 +20,8 @@
   ],
   "cpu": [
     "arm64"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }

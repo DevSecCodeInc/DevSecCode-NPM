@@ -17,7 +17,7 @@ npm-dist/
 │   ├── scanner/                    ← @devseccode/scanner (Node CLI/UX)
 │   ├── scanner-darwin-arm64/       ← public/starter Core artifact package
 │   ├── scanner-linux-x64/
-│   ├── scanner-linux-arm64/        ← private scaffold for planned support
+│   ├── scanner-linux-arm64/
 │   └── scanner-win32-x64/
 └── scripts/
     ├── version.sh              ← echoes parent npm wrapper version
@@ -53,7 +53,7 @@ inspectable, the Core public-starter profile—not compilation—is the IP bound
 NPM's migration target is Core's
 [`artifact-v2 downstream product contract`](https://github.com/DevSecCodeInc/DevSecCode-Core/blob/main/docs/distribution/artifact-v2-downstream-contract.md).
 The `0.5.0` candidate implementation uses this contract. Production remains on
-`0.4.5` until the candidate and three-platform registry acceptance gates pass.
+`0.4.5` until the candidate and four-platform registry acceptance gates pass.
 
 NPM consumes only a signed `devseccode-core-artifacts/v2` `public-starter`
 matrix through `@devseccode/core-launcher` and the shared validator. Each
@@ -102,9 +102,9 @@ DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
   hook, or node-gyp.
 - **Alpine / musl Linux is not supported.** Use a glibc image such as Debian
   or Ubuntu in CI.
-- **Linux arm64 is planned, not published.** The private package scaffold is
-  retained so it can be activated only after Core adds a signed, accepted
-  `public-starter` target.
+- **Linux arm64 is a supported candidate target.** It receives the same signed,
+  accepted `public-starter` artifact contract and release gates as the other
+  platform packages.
 
 See [`DevSecCode-NPM Core Migration Plan.md`](../docs/DevSecCode-NPM%20Core%20Migration%20Plan.md)
 for the migration contract and release gates.

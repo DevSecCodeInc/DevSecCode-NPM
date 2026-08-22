@@ -119,7 +119,7 @@ node .\npm-dist\scripts\candidate-platform-test.mjs cleanup
 ```
 
 Success reports `Candidate 0.5.0 passed isolated` followed by exactly one of
-`darwin-arm64`, `linux-x64`, or `win32-x64`. The installed scope contains the
+`darwin-arm64`, `linux-x64`, `linux-arm64`, or `win32-x64`. The installed scope contains the
 parent scanner, Core launcher, and exactly one matching scanner platform
 package. The cleanup command verifies npm uninstall behavior before removing
 the isolated test directory.

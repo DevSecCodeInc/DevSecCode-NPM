@@ -9,7 +9,7 @@ const require = createRequire(import.meta.url);
 const { verifyManifestSignature } = require("../packages/scanner/lib/artifact-trust");
 
 const PUBLIC_R2_BASE_URL = "https://pub-191ac21d4b494237b052c0a3f0b9baee.r2.dev";
-const TARGETS = ["darwin-arm64", "linux-x64", "win32-x64"];
+const TARGETS = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
 const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
 const MAX_SIGNATURE_BYTES = 8192;
 const MAX_ARCHIVE_BYTES = 512 * 1024 * 1024;

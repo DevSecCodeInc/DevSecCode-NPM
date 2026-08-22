@@ -4,7 +4,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const TARGETS = ["darwin-arm64", "linux-x64", "win32-x64"];
+const TARGETS = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
 const PARENT_FILES = new Set([
   "package/LICENSE",
   "package/README.md",

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const VERSION = process.env.DEVSECCODE_NPM_CANDIDATE_VERSION || "0.5.0";
 const PACKAGE = `@devseccode/scanner@${VERSION}`;
-const TARGETS = new Set(["darwin-arm64", "linux-x64", "win32-x64"]);
+const TARGETS = new Set(["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"]);
 const target = `${process.platform}-${process.arch}`;
 const root = path.join(os.tmpdir(), `devseccode-npm-candidate-${VERSION}`);
 const globalRoot = path.join(root, "global");

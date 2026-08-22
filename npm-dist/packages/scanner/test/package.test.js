@@ -46,10 +46,14 @@ test("optional dependency matrix matches supported targets", () => {
   }
 });
 
-test("planned linux-arm64 package cannot be published", () => {
-  const planned = require("../../scanner-linux-arm64/package.json");
-  assert.equal(planned.private, true);
-  assert.ok(!pkg.optionalDependencies[planned.name]);
+test("linux-arm64 platform package is aligned and publishable", () => {
+  const platform = require("../../scanner-linux-arm64/package.json");
+  assert.equal(platform.private, undefined);
+  assert.equal(platform.version, pkg.version);
+  assert.equal(pkg.optionalDependencies[platform.name], pkg.version);
+  assert.deepEqual(platform.os, ["linux"]);
+  assert.deepEqual(platform.cpu, ["arm64"]);
+  assert.equal(platform.publishConfig.access, "public");
 });
 
 test("Core endpoint discovery stays inside the package state root", () => {

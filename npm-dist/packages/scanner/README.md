@@ -90,10 +90,11 @@ matches your machine; the rest are skipped by the `os` / `cpu` fields.
 | ------------------------------------- | --------------------------------------- |
 | macOS Apple Silicon (`darwin-arm64`)  | `@devseccode/scanner-darwin-arm64`      |
 | Linux x64                             | `@devseccode/scanner-linux-x64`         |
+| Linux arm64                           | `@devseccode/scanner-linux-arm64`       |
 | Windows x64                           | `@devseccode/scanner-win32-x64`         |
 
-Linux arm64 and Intel Mac (`darwin-x64`) are planned expansion targets and are
-not published in this release. Alpine / musl Linux is not supported; run from a
+Intel Mac (`darwin-x64`) is a planned expansion target and is not published in
+this release. Alpine / musl Linux is not supported; run from a
 Debian or Ubuntu sidecar in CI.
 
 ## Privacy

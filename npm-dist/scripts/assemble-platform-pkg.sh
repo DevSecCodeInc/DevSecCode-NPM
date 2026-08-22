@@ -8,7 +8,7 @@
 # Usage:
 #   bash npm-dist/scripts/assemble-platform-pkg.sh <target> <core-artifact-dir>
 #
-# Where <target> is one of darwin-arm64, linux-x64, win32-x64.
+# Where <target> is one of darwin-arm64, linux-x64, linux-arm64, win32-x64.
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ TARGET="$1"
 CORE_ARTIFACT_DIR="$2"
 
 case "$TARGET" in
-  darwin-arm64|linux-x64|win32-x64) ;;
+  darwin-arm64|linux-x64|linux-arm64|win32-x64) ;;
   *) echo "assemble-platform-pkg: unknown or unsupported target '$TARGET'" >&2; exit 2 ;;
 esac
 

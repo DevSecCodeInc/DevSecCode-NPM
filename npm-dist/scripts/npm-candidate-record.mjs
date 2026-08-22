@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const PACKAGE_TARGETS = ["darwin-arm64", "linux-x64", "win32-x64"];
+const PACKAGE_TARGETS = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
 const MAX_PACKAGE_BYTES = 100 * 1024 * 1024;
 
 function fail(message) {

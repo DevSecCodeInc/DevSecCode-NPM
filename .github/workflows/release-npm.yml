@@ -59,7 +59,7 @@ jobs:
           node - "$CORE_VERSION" <<'JS'
           const fs = require("node:fs");
           const path = require("node:path");
-          const targets = ["darwin-arm64", "linux-x64", "win32-x64"];
+          const targets = ["darwin-arm64", "linux-x64", "linux-arm64", "win32-x64"];
           const parent = JSON.parse(fs.readFileSync("npm-dist/packages/scanner/package.json", "utf8"));
           if (parent.version !== "0.5.0") throw new Error(`unexpected NPM candidate version ${parent.version}`);
           if (parent.dependencies["@devseccode/core-launcher"] !== "0.6.0") throw new Error("Core launcher pin mismatch");
@@ -99,7 +99,7 @@ jobs:
 
       - name: Validate public-starter profile and assemble platform packages
         run: |
-          for target in darwin-arm64 linux-x64 win32-x64; do
+          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
             node npm-dist/scripts/validate-public-core-artifact.js \
               npm-dist/_core-artifacts/devseccode-core-artifacts.json \
               npm-dist/_core-artifacts \
@@ -123,7 +123,7 @@ jobs:
         run: |
           candidate="$RUNNER_TEMP/npm-candidate"
           mkdir -p "$candidate/core"
-          for target in darwin-arm64 linux-x64 win32-x64; do
+          for target in darwin-arm64 linux-x64 linux-arm64 win32-x64; do
             npm pack "npm-dist/packages/scanner-$target" --pack-destination "$candidate"
           done
           npm pack npm-dist/packages/scanner --pack-destination "$candidate"
@@ -171,6 +171,8 @@ jobs:
         include:
           - target: linux-x64
             os: ubuntu-22.04
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
           - target: darwin-arm64
             os: macos-15
           - target: win32-x64

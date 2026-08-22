@@ -14,6 +14,7 @@ const {
 const SUPPORTED_TARGETS = Object.freeze([
   "darwin-arm64",
   "linux-x64",
+  "linux-arm64",
   "win32-x64",
 ]);
 
