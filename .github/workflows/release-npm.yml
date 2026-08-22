@@ -15,12 +15,10 @@ on:
       core_ref:
         description: Exact accepted Core source commit
         required: true
-        default: cb08082778d735ba560ca5e0ba461b440e9ac49d
         type: string
       core_candidate_id:
         description: Exact accepted Core artifact-v2 candidate ID
         required: true
-        default: cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
         type: string
 
 concurrency:
@@ -139,6 +137,7 @@ jobs:
           node npm-dist/scripts/npm-candidate-record.mjs \
             verify "$candidate" 0.5.0 "$NPM_REF" \
             "$CORE_VERSION" "$CORE_REF" "$CORE_CANDIDATE_ID"
+          node npm-dist/scripts/audit-public-candidate.mjs "$candidate"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

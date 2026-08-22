@@ -40,14 +40,16 @@ before Step 2. Step 1 runs this same helper against the same bytes on native
 Ubuntu 22.04 x64; that successful job is the Linux acceptance record. Nothing
 has reached npm at this point.
 
-## Fixed 0.5.0 Core inputs
+## Fixed release inputs
 
 - Core version: `0.3.6`
-- Core source: `cb08082778d735ba560ca5e0ba461b440e9ac49d`
-- Core candidate: `cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1`
 - Core profile: `public-starter`
 - Core launcher: `@devseccode/core-launcher@0.6.0`
 - NPM version: `0.5.0`
+
+The Core source and candidate ID must come from the successful artifact-v2
+candidate built after the public-starter module boundary was merged. The
+workflow has no stale default for either value.
 
 ## Prerequisites
 
@@ -55,7 +57,12 @@ has reached npm at this point.
 - Core launcher `0.6.0` exists on npm with the exact integrity produced by the
   Core launcher release workflow.
 - The NPM repository `npm` environment exists.
-- Repository secret `NPM_TOKEN` can publish the four `@devseccode` packages.
+- Each of `@devseccode/scanner`, `@devseccode/scanner-darwin-arm64`,
+  `@devseccode/scanner-linux-x64`, and `@devseccode/scanner-win32-x64` has an
+  npm Trusted Publisher for organization `DevSecCodeInc`, repository
+  `DevSecCode-NPM`, workflow `promote-npm.yml`, and environment `npm`.
+- The `npm` environment has no `NPM_TOKEN` requirement. Candidate publication
+  uses GitHub OIDC and npm Trusted Publishing.
 - Repository variable `CORE_V2_WINDOWS11_X64_RUNNER_LABEL` is
   `devseccode-win11-x64`.
 - The managed Windows 11 runner group permits DevSecCode-NPM.
@@ -67,19 +74,28 @@ cd /Users/matt/Projects/dsc/DevSecCode-NPM
 git switch main
 git pull --ff-only origin main
 NPM_REF="$(git rev-parse HEAD)"
+CORE_VERSION=0.3.6
+NPM_VERSION=0.5.0
+printf 'Core source commit from the accepted Core candidate: '
+IFS= read -r CORE_REF
+printf 'Core candidate ID from the accepted Core candidate: '
+IFS= read -r CORE_CANDIDATE_ID
+[[ "$CORE_REF" =~ ^[0-9a-f]{40}$ ]]
+[[ "$CORE_CANDIDATE_ID" =~ ^${CORE_REF}-run-[1-9][0-9]*-attempt-[1-9][0-9]*$ ]]
 
 gh workflow run release-npm.yml \
   --repo DevSecCodeInc/DevSecCode-NPM \
   --ref main \
   -f npm_ref="$NPM_REF" \
-  -f core_version=0.3.6 \
-  -f core_ref=cb08082778d735ba560ca5e0ba461b440e9ac49d \
-  -f core_candidate_id=cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+  -f core_version="$CORE_VERSION" \
+  -f core_ref="$CORE_REF" \
+  -f core_candidate_id="$CORE_CANDIDATE_ID"
 ```
 
 Success means the workflow downloaded the real public R2 candidate, verified
 the signed v2 manifest and public-only boundary, assembled all three platform
-packages, passed the unit suite, exercised the exact private tarballs on Linux
+packages, audited the exact packed tarballs for unapproved source and payload
+files, passed the unit suite, exercised the exact private tarballs on Linux
 x64, macOS ARM64, and Windows x64, and uploaded
 `npm-artifact-v2-candidate`. It publishes nothing.
 
@@ -107,13 +123,12 @@ immutable, so do this only after Step 1 passes.
 gh workflow run promote-npm.yml \
   --repo DevSecCodeInc/DevSecCode-NPM \
   --ref main \
-  -f operation=publish-candidate \
   -f candidate_run_id="$CANDIDATE_RUN_ID" \
   -f npm_ref="$NPM_REF" \
-  -f npm_version=0.5.0 \
-  -f core_version=0.3.6 \
-  -f core_ref=cb08082778d735ba560ca5e0ba461b440e9ac49d \
-  -f core_candidate_id=cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+  -f npm_version="$NPM_VERSION" \
+  -f core_version="$CORE_VERSION" \
+  -f core_ref="$CORE_REF" \
+  -f core_candidate_id="$CORE_CANDIDATE_ID"
 ```
 
 Success means all four registry versions match the candidate-record
@@ -124,40 +139,29 @@ select only the matching platform package, and uninstall cleanly on Ubuntu
 Do not run this step until the private macOS, Windows, and Linux acceptance
 described above is complete and the operator has authorized npm publication.
 
-After that run succeeds:
-
-```bash
-ACCEPTANCE_RUN_ID="$(gh run list \
-  --repo DevSecCodeInc/DevSecCode-NPM \
-  --workflow promote-npm.yml \
-  --commit "$NPM_REF" \
-  --event workflow_dispatch \
-  --limit 20 \
-  --json databaseId,conclusion \
-  --jq '[.[] | select(.conclusion == "success")][0].databaseId')"
-test -n "$ACCEPTANCE_RUN_ID"
-```
-
 ## 3. Promote without rebuilding
 
+Trusted Publishing authenticates package publication. Moving `latest` is an
+interactive npm operation because it changes only dist-tags and must not
+depend on a long-lived automation token. After the publication workflow and
+all three registry acceptance jobs succeed, run:
+
 ```bash
-gh workflow run promote-npm.yml \
-  --repo DevSecCodeInc/DevSecCode-NPM \
-  --ref main \
-  -f operation=promote \
-  -f candidate_run_id="$CANDIDATE_RUN_ID" \
-  -f acceptance_run_id="$ACCEPTANCE_RUN_ID" \
-  -f npm_ref="$NPM_REF" \
-  -f npm_version=0.5.0 \
-  -f core_version=0.3.6 \
-  -f core_ref=cb08082778d735ba560ca5e0ba461b440e9ac49d \
-  -f core_candidate_id=cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+npm login
+for package in \
+  @devseccode/scanner-darwin-arm64 \
+  @devseccode/scanner-linux-x64 \
+  @devseccode/scanner-win32-x64 \
+  @devseccode/scanner
+do
+  test "$(npm view "$package@artifact-v2-candidate" version)" = "$NPM_VERSION"
+  npm dist-tag add "$package@$NPM_VERSION" latest
+done
 ```
 
-The workflow refuses promotion unless the candidate-publication/acceptance run
-succeeded for the same NPM commit. It verifies every registry integrity again,
-then moves `latest` for the three platform packages and parent package. It
-does not rebuild or republish bytes.
+Complete npm's interactive authentication or one-time-password prompt if it
+appears. These commands move `latest` for the three platform packages first
+and the parent package last. They do not rebuild or republish bytes.
 
 ## 4. Confirm and tag
 

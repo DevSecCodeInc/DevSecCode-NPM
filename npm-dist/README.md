@@ -73,11 +73,15 @@ promotion. Scanner evidence comes from public-starter Core through `/v1`.
 
 ```bash
 CORE_ARTIFACT_DIR="$(mktemp -d)"
+printf 'Accepted hardened Core source commit: '
+IFS= read -r CORE_REF
+printf 'Accepted hardened Core candidate ID: '
+IFS= read -r CORE_CANDIDATE_ID
 node npm-dist/scripts/download-public-core-candidate.mjs \
   "$CORE_ARTIFACT_DIR" \
   0.3.6 \
-  cb08082778d735ba560ca5e0ba461b440e9ac49d \
-  cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+  "$CORE_REF" \
+  "$CORE_CANDIDATE_ID"
 DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
   bash npm-dist/scripts/test-local-install.sh
 ```

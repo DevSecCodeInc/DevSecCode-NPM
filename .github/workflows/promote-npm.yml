@@ -1,24 +1,11 @@
-name: Publish or promote accepted NPM artifact-v2 candidate
+name: Publish accepted NPM artifact-v2 candidate
 
 on:
   workflow_dispatch:
     inputs:
-      operation:
-        description: Release operation
-        required: true
-        default: publish-candidate
-        type: choice
-        options:
-          - publish-candidate
-          - promote
       candidate_run_id:
         description: Successful Build NPM artifact-v2 candidate run ID
         required: true
-        type: string
-      acceptance_run_id:
-        description: Successful publish-candidate run ID; required for promote
-        required: false
-        default: ""
         type: string
       npm_ref:
         description: Exact NPM source commit bound to the candidate
@@ -37,16 +24,14 @@ on:
       core_ref:
         description: Exact accepted Core source commit
         required: true
-        default: cb08082778d735ba560ca5e0ba461b440e9ac49d
         type: string
       core_candidate_id:
         description: Exact accepted Core artifact-v2 candidate ID
         required: true
-        default: cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
         type: string
 
 concurrency:
-  group: npm-v2-release-${{ inputs.npm_version }}-${{ inputs.operation }}
+  group: npm-v2-publish-${{ inputs.npm_version }}
   cancel-in-progress: false
 
 permissions:
@@ -71,6 +56,9 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
+      - name: Install OIDC-capable npm CLI
+        run: npm install --global npm@11.5.1
+
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: npm-artifact-v2-candidate
@@ -93,35 +81,11 @@ jobs:
             "$CORE_VERSION" "$CORE_REF" "$CORE_CANDIDATE_ID"
 
       - name: Publish exact candidate versions
-        if: inputs.operation == 'publish-candidate'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           PUBLISH_TAG: artifact-v2-candidate
         run: bash npm-dist/scripts/publish-all.sh "$RUNNER_TEMP/npm-candidate"
 
-      - name: Verify successful candidate acceptance run
-        if: inputs.operation == 'promote'
-        env:
-          ACCEPTANCE_RUN_ID: ${{ inputs.acceptance_run_id }}
-          GH_TOKEN: ${{ github.token }}
-          NPM_REF: ${{ inputs.npm_ref }}
-        run: |
-          [[ "$ACCEPTANCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
-          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$ACCEPTANCE_RUN_ID")"
-          test "$(jq -r .name <<<"$run_json")" = "Publish or promote accepted NPM artifact-v2 candidate"
-          test "$(jq -r .event <<<"$run_json")" = "workflow_dispatch"
-          test "$(jq -r .head_sha <<<"$run_json")" = "$NPM_REF"
-          test "$(jq -r .conclusion <<<"$run_json")" = "success"
-
-      - name: Promote exact accepted versions
-        if: inputs.operation == 'promote'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PROMOTION_TAG: latest
-        run: bash npm-dist/scripts/promote-all.sh "$RUNNER_TEMP/npm-candidate"
-
   acceptance:
-    if: inputs.operation == 'publish-candidate'
     needs: release
     strategy:
       fail-fast: false
