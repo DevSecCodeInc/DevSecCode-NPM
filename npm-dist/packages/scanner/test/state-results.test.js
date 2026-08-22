@@ -6,8 +6,9 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { formatJson, formatTerminal } = require("../lib/renderers");
+const { formatJson, formatJunit, formatTerminal } = require("../lib/renderers");
 const { applySeverityOverrides, normalizeScanResult } = require("../lib/results");
+const { normalizeSeverity } = require("../lib/severity");
 const { buildReport, loadProfile, recordHunt, saveProfile, statePath } = require("../lib/state");
 
 test("normalizeScanResult adapts Core camelCase findings", () => {
@@ -31,6 +32,14 @@ test("normalizeScanResult adapts Core camelCase findings", () => {
   assert.equal(result.findings[0].severity, "critical");
   assert.equal(result.findings[0].ruleId, "deva.cwe-798.test");
   assert.equal(result.filesScanned, 1);
+});
+
+test("Core numeric rule severities map to public labels", () => {
+  assert.equal(normalizeSeverity(10), "info");
+  assert.equal(normalizeSeverity(20), "low");
+  assert.equal(normalizeSeverity(30), "medium");
+  assert.equal(normalizeSeverity(40), "high");
+  assert.equal(normalizeSeverity(50), "critical");
 });
 
 test("severity overrides are presentation-only on the normalized result copy", () => {
@@ -65,6 +74,26 @@ test("terminal renderer includes summary counts", () => {
   assert.match(text, /HIGH/);
   assert.match(text, /1 findings/);
   assert.match(text, /Scanned 3 files/);
+});
+
+test("JUnit renderer preserves the public finding contract", () => {
+  const result = normalizeScanResult({
+    findings: [{
+      ruleId: "deva.cwe-79.test",
+      severity: "HIGH",
+      filePath: "a&b.js",
+      lineStart: 3,
+      column: 2,
+      message: 'unsafe <HTML> "sink"',
+      fixSuggestion: "escape & sanitize",
+    }],
+  });
+  const text = formatJunit(result);
+
+  assert.match(text, /<testsuite name="dsc" tests="1" failures="1" errors="0">/);
+  assert.match(text, /a&amp;b\.js:3/);
+  assert.match(text, /unsafe &lt;HTML&gt; &quot;sink&quot;/);
+  assert.match(text, /Fix: escape &amp; sanitize/);
 });
 
 test("profile state honors DEVSECCODE_HOME and preserves fields", () => {

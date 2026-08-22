@@ -1,16 +1,16 @@
 {
   "name": "@devseccode/scanner-linux-arm64",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0",
   "private": true,
   "description": "Reserved package scaffold for planned linux-arm64 support. Not published or installed until Core promotes this target.",
   "license": "SEE LICENSE IN LICENSE",
   "author": "DevSecCode",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/DevSecCode/DevSecCode-NPM.git",
+    "url": "git+https://github.com/DevSecCodeInc/DevSecCode-NPM.git",
     "directory": "npm-dist/packages/scanner-linux-arm64"
   },
-  "homepage": "https://github.com/DevSecCode/DevSecCode-NPM#readme",
+  "homepage": "https://github.com/DevSecCodeInc/DevSecCode-NPM#readme",
   "files": [
     "artifacts/",
     "README.md",

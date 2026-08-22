@@ -1,250 +1,207 @@
-name: Release to npm
-
-# Core-backed npm release. This workflow packages already-built
-# DevSecCode-Core public/starter backend artifacts; it does not build the
-# scanner engine, OpenGrep bundle, or a PyInstaller CLI binary in this
-# repository.
-#
-# Required:
-#   secrets.NPM_TOKEN              -- npm automation token for @devseccode/*
-#   secrets.CORE_ARTIFACT_URL      -- optional default URL to a tar/zip bundle
-#                                     containing devseccode-core-artifacts.json
-#                                     and all referenced public/starter
-#                                     platform archives.
+name: Build NPM artifact-v2 candidate
 
 on:
-  push:
-    tags:
-      - "npm-v*"
   workflow_dispatch:
     inputs:
-      core_artifact_url:
-        description: "URL to public/starter Core artifact bundle (.tar.gz, .tgz, or .zip)"
-        required: false
-        default: ""
-      dry_run:
-        description: "Pack tarballs but skip npm publish"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
-      dist_tag:
-        description: "npm dist-tag for publish"
-        required: false
-        default: "core-migration-canary"
+      npm_ref:
+        description: Exact 40-character NPM main commit to package
+        required: true
+        type: string
+      core_version:
+        description: Accepted Core version
+        required: true
+        default: 0.3.6
+        type: string
+      core_ref:
+        description: Exact accepted Core source commit
+        required: true
+        default: cb08082778d735ba560ca5e0ba461b440e9ac49d
+        type: string
+      core_candidate_id:
+        description: Exact accepted Core artifact-v2 candidate ID
+        required: true
+        default: cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+        type: string
+
+concurrency:
+  group: npm-v2-candidate-${{ inputs.npm_ref }}-${{ inputs.core_candidate_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
   package:
-    name: Package public/starter Core artifacts
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
+          ref: ${{ inputs.npm_ref }}
+          fetch-depth: 0
 
-      - name: Verify release ref and package versions
-        shell: bash
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify immutable product and Core identity
         env:
-          RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || '' }}
+          NPM_REF: ${{ inputs.npm_ref }}
+          CORE_VERSION: ${{ inputs.core_version }}
+          CORE_REF: ${{ inputs.core_ref }}
+          CORE_CANDIDATE_ID: ${{ inputs.core_candidate_id }}
         run: |
-          node - "$RELEASE_TAG" <<'JS'
+          [[ "$NPM_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CORE_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CORE_CANDIDATE_ID" =~ ^${CORE_REF}-run-[1-9][0-9]*-attempt-[1-9][0-9]*$ ]]
+          test "$GITHUB_SHA" = "$NPM_REF"
+          test "$(git rev-parse HEAD)" = "$NPM_REF"
+          git merge-base --is-ancestor "$NPM_REF" origin/main
+          node - "$CORE_VERSION" <<'JS'
           const fs = require("node:fs");
           const path = require("node:path");
           const targets = ["darwin-arm64", "linux-x64", "win32-x64"];
           const parent = JSON.parse(fs.readFileSync("npm-dist/packages/scanner/package.json", "utf8"));
+          if (parent.version !== "0.5.0") throw new Error(`unexpected NPM candidate version ${parent.version}`);
+          if (parent.dependencies["@devseccode/core-launcher"] !== "0.6.0") throw new Error("Core launcher pin mismatch");
+          if (parent.engines.node !== "^22.0.0 || ^24.0.0") throw new Error("Node support contract mismatch");
           for (const target of targets) {
             const name = `@devseccode/scanner-${target}`;
-            const file = path.join("npm-dist", "packages", `scanner-${target}`, "package.json");
-            const platformPackage = JSON.parse(fs.readFileSync(file, "utf8"));
-            if (platformPackage.version !== parent.version) {
-              throw new Error(`${name} version ${platformPackage.version} does not match parent ${parent.version}`);
-            }
-            if (parent.optionalDependencies[name] !== parent.version) {
-              throw new Error(`${name} optional dependency is not pinned to ${parent.version}`);
+            const platform = JSON.parse(fs.readFileSync(path.join("npm-dist/packages", `scanner-${target}`, "package.json"), "utf8"));
+            if (platform.version !== parent.version || parent.optionalDependencies[name] !== parent.version) {
+              throw new Error(`${name} is not exactly pinned to ${parent.version}`);
             }
           }
-          const releaseTag = process.argv[2];
-          if (releaseTag && releaseTag !== `npm-v${parent.version}`) {
-            throw new Error(`release tag ${releaseTag} must equal npm-v${parent.version}`);
-          }
-          console.log(`release package version ${parent.version}`);
+          if (process.argv[2] !== "0.3.6") throw new Error(`unexpected Core version ${process.argv[2]}`);
           JS
 
-      - name: Verify Core launcher dependency is published
-        shell: bash
+      - name: Install exact Core launcher
         run: |
-          node - <<'JS'
-          const pkg = require("./npm-dist/packages/scanner/package.json");
-          const version = pkg.dependencies && pkg.dependencies["@devseccode/core-launcher"];
-          if (!version) {
-            console.error("@devseccode/core-launcher dependency missing from parent package");
-            process.exit(1);
-          }
-          console.log(version);
-          JS
-          VERSION="$(node -e 'process.stdout.write(require("./npm-dist/packages/scanner/package.json").dependencies["@devseccode/core-launcher"])')"
-          npm view "@devseccode/core-launcher@$VERSION" version
+          npm install \
+            --prefix npm-dist/packages/scanner \
+            --package-lock=false \
+            --ignore-scripts \
+            --no-audit \
+            --no-fund \
+            --omit=optional
+          test "$(node -p "require('./npm-dist/packages/scanner/node_modules/@devseccode/core-launcher/package.json').version")" = "0.6.0"
 
-      - name: Resolve artifact bundle URL
-        id: artifact-url
-        shell: bash
+      - name: Download accepted public-starter Core candidate
         env:
-          INPUT_URL: ${{ github.event.inputs.core_artifact_url }}
-          SECRET_URL: ${{ secrets.CORE_ARTIFACT_URL }}
+          CORE_VERSION: ${{ inputs.core_version }}
+          CORE_REF: ${{ inputs.core_ref }}
+          CORE_CANDIDATE_ID: ${{ inputs.core_candidate_id }}
         run: |
-          URL="${INPUT_URL:-$SECRET_URL}"
-          if [ -z "$URL" ]; then
-            echo "::error::Set workflow input core_artifact_url or secret CORE_ARTIFACT_URL."
-            exit 2
-          fi
-          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          node npm-dist/scripts/download-public-core-candidate.mjs \
+            npm-dist/_core-artifacts \
+            "$CORE_VERSION" \
+            "$CORE_REF" \
+            "$CORE_CANDIDATE_ID"
 
-      - name: Download public/starter Core artifact bundle
-        shell: bash
-        run: |
-          mkdir -p npm-dist/_core-artifacts
-          curl -L "${{ steps.artifact-url.outputs.url }}" -o npm-dist/_core-artifacts/core-artifacts.bundle
-          file npm-dist/_core-artifacts/core-artifacts.bundle
-
-      - name: Extract public/starter Core artifact bundle
-        shell: bash
-        run: |
-          mkdir -p npm-dist/_core-artifacts/extracted
-          python3 npm-dist/scripts/extract-core-artifact-bundle.py \
-            npm-dist/_core-artifacts/core-artifacts.bundle \
-            npm-dist/_core-artifacts/extracted
-          find npm-dist/_core-artifacts/extracted -maxdepth 3 -type f -print
-
-      - name: Locate public/starter Core artifact manifest
-        id: core-artifacts
-        shell: bash
-        run: |
-          MANIFEST="$(find npm-dist/_core-artifacts/extracted -name devseccode-core-artifacts.json -type f | head -n1)"
-          if [ -z "$MANIFEST" ]; then
-            echo "::error::devseccode-core-artifacts.json not found in bundle."
-            exit 1
-          fi
-          if [ ! -f "$MANIFEST.sig" ]; then
-            echo "::error::devseccode-core-artifacts.json.sig not found beside manifest."
-            exit 1
-          fi
-          DIR="$(dirname "$MANIFEST")"
-          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Verify signed Core artifact manifest
-        shell: bash
-        run: |
-          node - "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" <<'JS'
-          const { verifyManifestSignature } = require("./npm-dist/packages/scanner/lib/artifact-trust");
-          verifyManifestSignature(process.argv[2]);
-          console.log("Core artifact manifest signature verified");
-          JS
-
-      - name: Validate target coverage
-        shell: bash
-        run: |
-          node - "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" <<'JS'
-          const fs = require("node:fs");
-          const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
-          const have = new Set((manifest.artifacts || []).map((item) => item.target));
-          const required = ["darwin-arm64", "linux-x64", "win32-x64"];
-          const missing = required.filter((target) => !have.has(target));
-          if (missing.length) {
-            console.error(`Missing public/starter Core artifact targets: ${missing.join(", ")}`);
-            process.exit(1);
-          }
-          JS
-
-      - name: Validate public/starter artifact profile
-        shell: bash
+      - name: Validate public-starter profile and assemble platform packages
         run: |
           for target in darwin-arm64 linux-x64 win32-x64; do
             node npm-dist/scripts/validate-public-core-artifact.js \
-              "${{ steps.core-artifacts.outputs.dir }}/devseccode-core-artifacts.json" \
-              "${{ steps.core-artifacts.outputs.dir }}" \
+              npm-dist/_core-artifacts/devseccode-core-artifacts.json \
+              npm-dist/_core-artifacts \
               "$target"
+            bash npm-dist/scripts/assemble-platform-pkg.sh "$target" npm-dist/_core-artifacts
           done
-
-      - name: Verify no generated Core payload is tracked
-        shell: bash
-        run: |
           if git ls-files 'npm-dist/packages/scanner-*/artifacts/*' | grep -v '/.gitkeep$' | grep -q .; then
-            echo "::error::Generated Core payloads must be assembled in CI, not committed."
-            git ls-files 'npm-dist/packages/scanner-*/artifacts/*' | grep -v '/.gitkeep$'
+            echo "::error::Generated Core payloads must not be committed."
             exit 1
           fi
 
-      - name: Assemble platform packages
-        shell: bash
-        run: |
-          for target in darwin-arm64 linux-x64 win32-x64; do
-            bash npm-dist/scripts/assemble-platform-pkg.sh "$target" "${{ steps.core-artifacts.outputs.dir }}"
-          done
-
-      - name: Run parent package tests
-        shell: bash
+      - name: Run NPM tests
         run: node --test npm-dist/packages/scanner/test/*.test.js
 
-      - name: Package dry run
-        shell: bash
+      - name: Pack exact candidate tarballs and release record
+        env:
+          NPM_REF: ${{ inputs.npm_ref }}
+          CORE_VERSION: ${{ inputs.core_version }}
+          CORE_REF: ${{ inputs.core_ref }}
+          CORE_CANDIDATE_ID: ${{ inputs.core_candidate_id }}
         run: |
-          export npm_config_cache="$RUNNER_TEMP/npm-cache"
-          ( cd npm-dist/packages/scanner && npm pack --dry-run )
+          candidate="$RUNNER_TEMP/npm-candidate"
+          mkdir -p "$candidate/core"
           for target in darwin-arm64 linux-x64 win32-x64; do
-            ( cd "npm-dist/packages/scanner-$target" && npm pack --dry-run )
+            npm pack "npm-dist/packages/scanner-$target" --pack-destination "$candidate"
           done
+          npm pack npm-dist/packages/scanner --pack-destination "$candidate"
+          cp npm-dist/_core-artifacts/devseccode-core-artifacts.json "$candidate/core/"
+          cp npm-dist/_core-artifacts/devseccode-core-artifacts.json.sig "$candidate/core/"
+          launcher_integrity="$(npm view @devseccode/core-launcher@0.6.0 dist.integrity)"
+          CORE_LAUNCHER_INTEGRITY="$launcher_integrity" \
+            node npm-dist/scripts/npm-candidate-record.mjs \
+              create "$candidate" 0.5.0 "$NPM_REF" \
+              "$CORE_VERSION" "$CORE_REF" "$CORE_CANDIDATE_ID"
+          node npm-dist/scripts/npm-candidate-record.mjs \
+            verify "$candidate" 0.5.0 "$NPM_REF" \
+            "$CORE_VERSION" "$CORE_REF" "$CORE_CANDIDATE_ID"
 
-      - name: Fresh install smoke with packaged Linux public/starter Core artifact
-        shell: bash
-        run: |
-          export npm_config_cache="$RUNNER_TEMP/npm-cache"
-          DSC_CORE_TARGET=linux-x64 \
-            DSC_CORE_ARTIFACT_DIR="${{ steps.core-artifacts.outputs.dir }}" \
-            bash npm-dist/scripts/test-local-install.sh
-
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: npm-core-packages
-          path: npm-dist/packages/
+          name: npm-artifact-v2-candidate
+          path: ${{ runner.temp }}/npm-candidate/
           if-no-files-found: error
+          retention-days: 30
 
-  publish:
-    name: Publish to npm
-    needs: [package]
-    runs-on: ubuntu-latest
-    environment: npm
-    permissions:
-      contents: read
+      - name: Record candidate summary
+        env:
+          NPM_REF: ${{ inputs.npm_ref }}
+          CORE_VERSION: ${{ inputs.core_version }}
+          CORE_REF: ${{ inputs.core_ref }}
+          CORE_CANDIDATE_ID: ${{ inputs.core_candidate_id }}
+        run: |
+          {
+            echo "## NPM artifact-v2 candidate"
+            echo "- NPM source: \`$NPM_REF\`"
+            echo "- NPM version: \`0.5.0\`"
+            echo "- Core version: \`$CORE_VERSION\`"
+            echo "- Core source: \`$CORE_REF\`"
+            echo "- Core candidate: \`$CORE_CANDIDATE_ID\`"
+            echo "- Published: no"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  private-acceptance:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-22.04
+          - target: darwin-arm64
+            os: macos-15
+          - target: win32-x64
+            os: ${{ vars.CORE_V2_WINDOWS11_X64_RUNNER_LABEL }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: "20"
-          registry-url: "https://registry.npmjs.org"
+          ref: ${{ inputs.npm_ref }}
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          name: npm-core-packages
-          path: npm-dist/packages/
+          node-version: 24
+          registry-url: https://registry.npmjs.org
 
-      - name: Publish
-        if: github.event_name == 'push' || github.event.inputs.dry_run == 'false'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PUBLISH_TAG: ${{ github.event.inputs.dist_tag || 'core-migration-canary' }}
-        shell: bash
-        run: bash npm-dist/scripts/publish-all.sh
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-artifact-v2-candidate
+          path: ${{ runner.temp }}/npm-candidate
 
-      - name: Dry-run publish
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true'
+      - name: Install and exercise exact private candidate bytes
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          PUBLISH_TAG: ${{ github.event.inputs.dist_tag || 'core-migration-canary' }}
-        shell: bash
-        run: bash npm-dist/scripts/publish-all.sh --dry-run
+          DEVSECCODE_NPM_CANDIDATE_VERSION: 0.5.0
+          DEVSECCODE_NPM_CANDIDATE_DIR: ${{ runner.temp }}/npm-candidate
+          DEVSECCODE_NPM_SOURCE_COMMIT: ${{ inputs.npm_ref }}
+        run: node npm-dist/scripts/candidate-platform-test.mjs start-private
+
+      - name: Uninstall and remove isolated candidate state
+        if: always()
+        env:
+          DEVSECCODE_NPM_CANDIDATE_VERSION: 0.5.0
+        run: node npm-dist/scripts/candidate-platform-test.mjs cleanup

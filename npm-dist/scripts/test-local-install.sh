@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Pre-publish clean-install smoke for the Core-backed npm package.
 #
-# Usage:
-#   DSC_CORE_ARTIFACT_DIR=/path/to/signed-core-release-artifacts \
-#     bash npm-dist/scripts/test-local-install.sh
+# Usage is documented in npm-dist/TESTING.md.
 
 set -euo pipefail
 
@@ -21,16 +19,13 @@ infer_target() {
 
 TARGET="${DSC_CORE_TARGET:-$(infer_target)}"
 CORE_ARTIFACT_DIR="${DSC_CORE_ARTIFACT_DIR:-}"
-if [[ -z "$CORE_ARTIFACT_DIR" ]]; then
+PREPACKED_DIR="${DSC_PREPACKED_DIR:-}"
+if [[ -z "$CORE_ARTIFACT_DIR" && -z "$PREPACKED_DIR" ]]; then
   echo "test-local-install: set DSC_CORE_ARTIFACT_DIR to Core dist/artifacts" >&2
   exit 2
 fi
 
 echo "==> Host target: $TARGET"
-echo "==> Assembling scanner-$TARGET from $CORE_ARTIFACT_DIR"
-bash "$NPM_DIST/scripts/assemble-platform-pkg.sh" "$TARGET" "$CORE_ARTIFACT_DIR"
-
-echo "==> Packing parent + scanner-$TARGET tarballs"
 PACK_DIR="$(mktemp -d)"
 export HOME="$PACK_DIR/home"
 export DEVSECCODE_HOME="$PACK_DIR/devseccode-home"
@@ -77,8 +72,15 @@ JS
   rm -rf "$PACK_DIR"
 }
 trap cleanup EXIT INT TERM
-( cd "$NPM_DIST/packages/scanner" && npm pack --pack-destination "$PACK_DIR" >/dev/null )
-( cd "$NPM_DIST/packages/scanner-$TARGET" && npm pack --pack-destination "$PACK_DIR" >/dev/null )
+if [[ -n "$PREPACKED_DIR" ]]; then
+  cp "$PREPACKED_DIR"/devseccode-scanner-*.tgz "$PACK_DIR/"
+else
+  echo "==> Assembling scanner-$TARGET from $CORE_ARTIFACT_DIR"
+  bash "$NPM_DIST/scripts/assemble-platform-pkg.sh" "$TARGET" "$CORE_ARTIFACT_DIR"
+  echo "==> Packing parent + scanner-$TARGET tarballs"
+  ( cd "$NPM_DIST/packages/scanner" && npm pack --pack-destination "$PACK_DIR" >/dev/null )
+  ( cd "$NPM_DIST/packages/scanner-$TARGET" && npm pack --pack-destination "$PACK_DIR" >/dev/null )
+fi
 ls -la "$PACK_DIR"/*.tgz
 
 PARENT_TGZ="$(ls "$PACK_DIR"/devseccode-scanner-[0-9]*.tgz | head -n1)"
@@ -89,7 +91,7 @@ mkdir -p "$INSTALL_DIR"
 ( cd "$INSTALL_DIR" && npm init -y >/dev/null )
 
 echo "==> npm install in $INSTALL_DIR"
-( cd "$INSTALL_DIR" && npm install --no-fund --no-audit "$PLATFORM_TGZ" "$PARENT_TGZ" )
+( cd "$INSTALL_DIR" && npm install --no-fund --no-audit --omit=optional "$PLATFORM_TGZ" "$PARENT_TGZ" )
 
 DEVSECCODE="$INSTALL_DIR/node_modules/.bin/devseccode"
 DSC_ALIAS="$INSTALL_DIR/node_modules/.bin/dsc"

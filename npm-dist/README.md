@@ -1,5 +1,8 @@
 # npm distribution -- `@devseccode/scanner`
 
+Release operators start with
+[`docs/npm-artifact-v2-release-runbook.md`](../docs/npm-artifact-v2-release-runbook.md).
+
 This directory holds the npm side of the public DevSecCode CLI. Users install
 one package (`@devseccode/scanner`), run `devseccode hunt .`, and npm
 auto-resolves the right platform-specific public/starter Core artifact from a
@@ -49,8 +52,8 @@ inspectable, the Core public-starter profile—not compilation—is the IP bound
 
 NPM's migration target is Core's
 [`artifact-v2 downstream product contract`](https://github.com/DevSecCodeInc/DevSecCode-Core/blob/main/docs/distribution/artifact-v2-downstream-contract.md).
-This section describes the intended contract and does not claim that NPM is
-already connected to artifact-v2.
+The `0.5.0` candidate implementation uses this contract. Production remains on
+`0.4.5` until the candidate and three-platform registry acceptance gates pass.
 
 NPM consumes only a signed `devseccode-core-artifacts/v2` `public-starter`
 matrix through `@devseccode/core-launcher` and the shared validator. Each
@@ -66,14 +69,17 @@ requirement. NPM owns command parsing, terminal presentation, JavaScript APIs,
 profiles, quests, achievements, publishing order, canary validation, and
 promotion. Scanner evidence comes from public-starter Core through `/v1`.
 
-## Building Locally
+## Reproducing the candidate locally
 
 ```bash
-CORE_ARTIFACT_DIR=/path/to/core-release-artifacts
-bash npm-dist/scripts/assemble-platform-pkg.sh darwin-arm64 "$CORE_ARTIFACT_DIR"
-bash npm-dist/scripts/assemble-platform-pkg.sh linux-x64 "$CORE_ARTIFACT_DIR"
-bash npm-dist/scripts/assemble-platform-pkg.sh win32-x64 "$CORE_ARTIFACT_DIR"
-DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" bash npm-dist/scripts/test-local-install.sh
+CORE_ARTIFACT_DIR="$(mktemp -d)"
+node npm-dist/scripts/download-public-core-candidate.mjs \
+  "$CORE_ARTIFACT_DIR" \
+  0.3.6 \
+  cb08082778d735ba560ca5e0ba461b440e9ac49d \
+  cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
+  bash npm-dist/scripts/test-local-install.sh
 ```
 
 ## Things to Know
@@ -84,7 +90,8 @@ DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" bash npm-dist/scripts/test-local-inst
 - **NPM owns UX.** Command parsing, local output rendering, profile state,
   quests, and the gamified hunt layer live in the parent package.
 - **Core owns public starter scanning.** Workspace scans, public rule metadata,
-  and SARIF/JUnit exports flow through authenticated `/v1/*` routes. Full
+  and SARIF export flow through authenticated `/v1/*` routes. JUnit is a local
+  NPM presentation of Core findings. Full
   Core rulepacks, compliance mappings, model assets, and premium scanner logic
   are not shipped in public npm packages.
 - **No postinstall.** Install is file extraction only. No download step, shell

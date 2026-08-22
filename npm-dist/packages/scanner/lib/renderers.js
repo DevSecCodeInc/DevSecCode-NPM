@@ -58,6 +58,38 @@ function formatJson(result, options = {}) {
   return `${lines.join("\n")}\n`;
 }
 
+function escapeXml(value, attribute = false) {
+  let text = String(value == null ? "" : value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+  if (attribute) {
+    text = text.replaceAll('"', "&quot;").replaceAll("'", "&apos;");
+  }
+  return text;
+}
+
+function formatJunit(result) {
+  const findings = Array.isArray(result.findings) ? result.findings : [];
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<testsuite name="dsc" tests="${findings.length}" failures="${findings.length}" errors="0">`,
+  ];
+  for (const finding of findings) {
+    const ruleId = escapeXml(finding.ruleId, true);
+    const location = escapeXml(`${finding.filePath}:${finding.lineStart}`, true);
+    const message = escapeXml(finding.message, true);
+    let body = `${finding.ruleId} ${String(finding.severity).toUpperCase()} ` +
+      `${finding.filePath}:${finding.lineStart}:${finding.column}\n${finding.message}\n`;
+    if (finding.fixSuggestion) body += `Fix: ${finding.fixSuggestion}\n`;
+    lines.push(`  <testcase classname="${ruleId}" name="${location}">`);
+    lines.push(`    <failure message="${message}">${escapeXml(body)}</failure>`);
+    lines.push("  </testcase>");
+  }
+  lines.push("</testsuite>");
+  return `${lines.join("\n")}\n`;
+}
+
 function renderRuleTable(rules) {
   const rows = [["ID", "CWE", "Severity", "Languages", "Tier", "Confidence"]];
   for (const rule of rules) {
@@ -65,7 +97,7 @@ function renderRuleTable(rules) {
     rows.push([
       String(rule.id || rule.ruleId || ""),
       String(rule.cwe || metadata.cwe || ""),
-      String(rule.severity || metadata.severity || ""),
+      severityLabel(rule.severity == null ? metadata.severity : rule.severity),
       Array.isArray(rule.languages) ? rule.languages.join(",") : String(rule.languages || ""),
       String(rule.precision_tier || rule.precisionTier || metadata.precision_tier || metadata.precisionTier || ""),
       rule.confidence == null ? String(metadata.confidence || "") : Number(rule.confidence).toFixed(2),
@@ -107,6 +139,7 @@ function showInitResult(targetPath, existed, force) {
 }
 
 module.exports = {
+  formatJunit,
   formatJson,
   formatTerminal,
   renderRuleTable,

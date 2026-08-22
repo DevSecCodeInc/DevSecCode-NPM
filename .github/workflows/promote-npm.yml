@@ -1,0 +1,160 @@
+name: Publish or promote accepted NPM artifact-v2 candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Release operation
+        required: true
+        default: publish-candidate
+        type: choice
+        options:
+          - publish-candidate
+          - promote
+      candidate_run_id:
+        description: Successful Build NPM artifact-v2 candidate run ID
+        required: true
+        type: string
+      acceptance_run_id:
+        description: Successful publish-candidate run ID; required for promote
+        required: false
+        default: ""
+        type: string
+      npm_ref:
+        description: Exact NPM source commit bound to the candidate
+        required: true
+        type: string
+      npm_version:
+        description: Exact NPM package version
+        required: true
+        default: 0.5.0
+        type: string
+      core_version:
+        description: Accepted Core version
+        required: true
+        default: 0.3.6
+        type: string
+      core_ref:
+        description: Exact accepted Core source commit
+        required: true
+        default: cb08082778d735ba560ca5e0ba461b440e9ac49d
+        type: string
+      core_candidate_id:
+        description: Exact accepted Core artifact-v2 candidate ID
+        required: true
+        default: cb08082778d735ba560ca5e0ba461b440e9ac49d-run-31419121627-attempt-1
+        type: string
+
+concurrency:
+  group: npm-v2-release-${{ inputs.npm_version }}-${{ inputs.operation }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.npm_ref }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-artifact-v2-candidate
+          path: ${{ runner.temp }}/npm-candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Verify exact candidate record and bytes
+        env:
+          NPM_REF: ${{ inputs.npm_ref }}
+          NPM_VERSION: ${{ inputs.npm_version }}
+          CORE_VERSION: ${{ inputs.core_version }}
+          CORE_REF: ${{ inputs.core_ref }}
+          CORE_CANDIDATE_ID: ${{ inputs.core_candidate_id }}
+        run: |
+          test "$GITHUB_SHA" = "$NPM_REF"
+          node npm-dist/scripts/npm-candidate-record.mjs \
+            verify "$RUNNER_TEMP/npm-candidate" \
+            "$NPM_VERSION" "$NPM_REF" \
+            "$CORE_VERSION" "$CORE_REF" "$CORE_CANDIDATE_ID"
+
+      - name: Publish exact candidate versions
+        if: inputs.operation == 'publish-candidate'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PUBLISH_TAG: artifact-v2-candidate
+        run: bash npm-dist/scripts/publish-all.sh "$RUNNER_TEMP/npm-candidate"
+
+      - name: Verify successful candidate acceptance run
+        if: inputs.operation == 'promote'
+        env:
+          ACCEPTANCE_RUN_ID: ${{ inputs.acceptance_run_id }}
+          GH_TOKEN: ${{ github.token }}
+          NPM_REF: ${{ inputs.npm_ref }}
+        run: |
+          [[ "$ACCEPTANCE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/$ACCEPTANCE_RUN_ID")"
+          test "$(jq -r .name <<<"$run_json")" = "Publish or promote accepted NPM artifact-v2 candidate"
+          test "$(jq -r .event <<<"$run_json")" = "workflow_dispatch"
+          test "$(jq -r .head_sha <<<"$run_json")" = "$NPM_REF"
+          test "$(jq -r .conclusion <<<"$run_json")" = "success"
+
+      - name: Promote exact accepted versions
+        if: inputs.operation == 'promote'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PROMOTION_TAG: latest
+        run: bash npm-dist/scripts/promote-all.sh "$RUNNER_TEMP/npm-candidate"
+
+  acceptance:
+    if: inputs.operation == 'publish-candidate'
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            os: ubuntu-22.04
+          - target: darwin-arm64
+            os: macos-15
+          - target: win32-x64
+            os: ${{ vars.CORE_V2_WINDOWS11_X64_RUNNER_LABEL }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.npm_ref }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Wait for exact registry version
+        run: node npm-dist/scripts/wait-for-npm-version.mjs @devseccode/scanner "${{ inputs.npm_version }}"
+
+      - name: Exercise no-auth npx and isolated global install
+        env:
+          DEVSECCODE_NPM_CANDIDATE_VERSION: ${{ inputs.npm_version }}
+        run: node npm-dist/scripts/candidate-platform-test.mjs start-registry
+
+      - name: Stop isolated Core process
+        if: always()
+        env:
+          DEVSECCODE_NPM_CANDIDATE_VERSION: ${{ inputs.npm_version }}
+        run: node npm-dist/scripts/candidate-platform-test.mjs cleanup

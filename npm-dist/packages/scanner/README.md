@@ -20,8 +20,8 @@ public/starter artifact automatically; your source code stays on your machine.
   HTTP, XXE, and CSRF — across Python, JavaScript / TypeScript, Go,
   Java, and Rust.
 - **Infrastructure scanning** for Dockerfiles and Kubernetes manifests.
-- **Gamified TUI** (`hunt`) — a scan map, encounter cards, and a triage
-  flow designed to be run more than once.
+- **Gamified hunts** — XP, levels, achievements, streaks, quests, and shield
+  scores designed to make repeated scanning useful.
 - **Standard outputs** — SARIF (for GitHub Code Scanning), JUnit (for
   CI test runners), JSON (for downstream tooling), and a colorized
   terminal report.
@@ -116,7 +116,7 @@ remediation workflows.
 ## Repository
 
 Source, issue tracker, and changelog:
-[github.com/DevSecCode/DevSecCode-NPM](https://github.com/DevSecCode/DevSecCode-NPM)
+[github.com/DevSecCodeInc/DevSecCode-NPM](https://github.com/DevSecCodeInc/DevSecCode-NPM)
 
 ## License
 

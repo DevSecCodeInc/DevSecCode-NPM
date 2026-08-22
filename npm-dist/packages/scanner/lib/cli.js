@@ -8,6 +8,7 @@ const { ConfigError, INIT_TEMPLATE } = require("./config");
 const { commandCapabilities, coreRequest, ensureCoreForCommand } = require("./core");
 const { renderRuleTable, showIde, showInitResult, showQuests } = require("./renderers");
 const { formatScanOutput, runCoreScan, scanExitCode, writeOutput } = require("./scanner");
+const { severityLabel } = require("./severity");
 const {
   buildReport,
   loadProfile,
@@ -287,7 +288,7 @@ async function cmdExplain(argv) {
     return 2;
   }
   process.stdout.write(`${rule.id || rule.ruleId} (${rule.cwe || ""})\n`);
-  process.stdout.write(`Default severity: ${rule.severity || ""}\n`);
+  process.stdout.write(`Default severity: ${severityLabel(rule.severity)}\n`);
   if (rule.precision_tier || rule.precisionTier) {
     process.stdout.write(`Precision tier: ${rule.precision_tier || rule.precisionTier}\n`);
   }
