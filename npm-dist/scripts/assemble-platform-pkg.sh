@@ -107,9 +107,8 @@ if [[ ! -f "$TMP_EXTRACT/$BINARY_RELATIVE_PATH" ]]; then
 fi
 
 set +e
-rg --text --line-number --only-matching --no-heading --color never \
-  '/Users/[^/[:space:][:cntrl:]]+/(Projects|projects)/(dsc|DevSecCode[^/[:space:][:cntrl:]]*)|/home/[^/[:space:][:cntrl:]]+/(work|Projects|projects)/(dsc|DevSecCode[^/[:space:][:cntrl:]]*)|DevSecCode-Core|DevSecCode-Scanner' \
-  "$TMP_EXTRACT" >"$LOCAL_PATH_REPORT" 2>/dev/null
+node "$NPM_DIST/scripts/audit-local-checkout-paths.mjs" \
+  "$TMP_EXTRACT" >"$LOCAL_PATH_REPORT"
 LOCAL_PATH_STATUS=$?
 set -e
 if [[ "$LOCAL_PATH_STATUS" -eq 0 ]]; then
