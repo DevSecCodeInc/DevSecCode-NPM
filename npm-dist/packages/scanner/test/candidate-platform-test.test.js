@@ -44,3 +44,33 @@ test("candidate cleanup selects both explicitly installed packages", async () =>
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("Windows candidate commands bypass cmd shims without a command shell", async () => {
+  const { installedCliInvocation, packageManagerInvocation } = await import(
+    "../../../scripts/candidate-platform-test.mjs"
+  );
+  const node = "C:\\hostedtoolcache\\windows\\node\\24.19.0\\x64\\node.exe";
+  const modules = "C:\\candidate\\global\\node_modules";
+  const shim = "C:\\candidate\\global\\devseccode.cmd";
+  assert.deepEqual(packageManagerInvocation("npm", "win32", node), {
+    display: "npm.cmd",
+    executable: node,
+    prefixArgs: ["C:\\hostedtoolcache\\windows\\node\\24.19.0\\x64\\node_modules\\npm\\bin\\npm-cli.js"],
+    requiredFiles: ["C:\\hostedtoolcache\\windows\\node\\24.19.0\\x64\\node_modules\\npm\\bin\\npm-cli.js"],
+  });
+  assert.deepEqual(packageManagerInvocation("npx", "win32", node), {
+    display: "npx.cmd",
+    executable: node,
+    prefixArgs: ["C:\\hostedtoolcache\\windows\\node\\24.19.0\\x64\\node_modules\\npm\\bin\\npx-cli.js"],
+    requiredFiles: ["C:\\hostedtoolcache\\windows\\node\\24.19.0\\x64\\node_modules\\npm\\bin\\npx-cli.js"],
+  });
+  assert.deepEqual(installedCliInvocation(modules, shim, "win32", node), {
+    display: shim,
+    executable: node,
+    prefixArgs: ["C:\\candidate\\global\\node_modules\\@devseccode\\scanner\\bin\\dsc.js"],
+    requiredFiles: [
+      shim,
+      "C:\\candidate\\global\\node_modules\\@devseccode\\scanner\\bin\\dsc.js",
+    ],
+  });
+});
