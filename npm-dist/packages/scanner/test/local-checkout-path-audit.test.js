@@ -41,7 +41,8 @@ for (const [name, leakedPath] of [
     assert.ok(findings.some((finding) => leakedPath.includes(finding.value)));
     const result = spawnSync(process.execPath, [script, root], { encoding: "utf8" });
     assert.equal(result.status, 1);
-    assert.match(result.stdout, /backend\.bin/);
+    assert.match(result.stderr, /public artifact contains local checkout paths/);
+    assert.match(result.stderr, /backend\.bin/);
   });
 }
 

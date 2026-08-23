@@ -93,10 +93,8 @@ if (hash !== artifact.sha256) {
 JS
 
 TMP_EXTRACT="$(mktemp -d)"
-LOCAL_PATH_REPORT="${TMP_EXTRACT}.local-path-report.txt"
 cleanup_extract() {
   rm -rf "$TMP_EXTRACT"
-  rm -f "$LOCAL_PATH_REPORT"
 }
 trap cleanup_extract EXIT
 
@@ -106,20 +104,8 @@ if [[ ! -f "$TMP_EXTRACT/$BINARY_RELATIVE_PATH" ]]; then
   exit 1
 fi
 
-set +e
 node "$NPM_DIST/scripts/audit-local-checkout-paths.mjs" \
-  "$TMP_EXTRACT" >"$LOCAL_PATH_REPORT"
-LOCAL_PATH_STATUS=$?
-set -e
-if [[ "$LOCAL_PATH_STATUS" -eq 0 ]]; then
-  echo "assemble-platform-pkg: public/starter Core artifact contains local checkout paths; refusing to package it" >&2
-  sed -n '1,20p' "$LOCAL_PATH_REPORT" >&2
-  exit 1
-fi
-if [[ "$LOCAL_PATH_STATUS" -ne 1 ]]; then
-  echo "assemble-platform-pkg: local checkout path audit failed" >&2
-  exit 1
-fi
+  "$TMP_EXTRACT"
 
 mkdir -p "$PKG_DIR/artifacts"
 find "$PKG_DIR/artifacts" -depth -mindepth 1 ! -name .gitkeep -delete
