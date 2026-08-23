@@ -58,10 +58,15 @@ function main() {
   const [root] = process.argv.slice(2);
   if (!root) throw new Error("usage: audit-local-checkout-paths.mjs <directory>");
   const findings = findLocalCheckoutPaths(root);
-  for (const finding of findings) {
-    process.stdout.write(`${finding.file}:${finding.offset}:${finding.value}\n`);
+  if (findings.length) {
+    process.stderr.write(
+      "audit-local-checkout-paths: public artifact contains local checkout paths\n",
+    );
+    for (const finding of findings) {
+      process.stderr.write(`${finding.file}:${finding.offset}:${finding.value}\n`);
+    }
+    process.exitCode = 1;
   }
-  if (findings.length) process.exitCode = 1;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
