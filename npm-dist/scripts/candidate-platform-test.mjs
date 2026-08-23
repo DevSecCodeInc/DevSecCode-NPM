@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const VERSION = process.env.DEVSECCODE_NPM_CANDIDATE_VERSION || "0.5.0";
@@ -69,11 +70,19 @@ function stopCore() {
   run(process.execPath, [path.join(scriptDirectory, "stop-isolated-core.mjs"), stateRoot]);
 }
 
+export function installedCandidatePackages(modules, platformTarget) {
+  const scope = path.join(modules, "@devseccode");
+  return ["scanner", `scanner-${platformTarget}`]
+    .filter((name) => fs.existsSync(path.join(scope, name)))
+    .map((name) => `@devseccode/${name}`);
+}
+
 function clean() {
   stopCore();
-  if (fs.existsSync(cli)) {
+  if (fs.existsSync(globalRoot)) {
     const modules = globalModules();
-    run(npm, ["uninstall", "--global", "@devseccode/scanner"]);
+    const installed = installedCandidatePackages(modules, target);
+    if (installed.length) run(npm, ["uninstall", "--global", ...installed]);
     if (fs.existsSync(path.join(modules, "@devseccode", "scanner"))) fail("parent package remains after uninstall");
     if (fs.existsSync(path.join(modules, "@devseccode", `scanner-${target}`))) fail("platform package remains after uninstall");
   }
@@ -158,12 +167,28 @@ function privateTarballs(candidateDirectory, sourceCommit) {
   });
 }
 
+export function dependencyPackage(parentDirectory, dependencyName) {
+  const resolveFromParent = createRequire(path.join(parentDirectory, "package.json"));
+  let directory = path.dirname(resolveFromParent.resolve(dependencyName));
+  while (true) {
+    const packageFile = path.join(directory, "package.json");
+    if (fs.existsSync(packageFile)) {
+      const metadata = JSON.parse(fs.readFileSync(packageFile, "utf8"));
+      if (metadata.name === dependencyName) return metadata;
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) fail(`could not locate installed package metadata for ${dependencyName}`);
+    directory = parent;
+  }
+}
+
 function verifyInstalledPackages() {
   const modules = globalModules();
   const scope = path.join(modules, "@devseccode");
-  const parent = JSON.parse(fs.readFileSync(path.join(scope, "scanner", "package.json"), "utf8"));
+  const parentDirectory = path.join(scope, "scanner");
+  const parent = JSON.parse(fs.readFileSync(path.join(parentDirectory, "package.json"), "utf8"));
   const platform = JSON.parse(fs.readFileSync(path.join(scope, `scanner-${target}`, "package.json"), "utf8"));
-  const launcher = JSON.parse(fs.readFileSync(path.join(scope, "core-launcher", "package.json"), "utf8"));
+  const launcher = dependencyPackage(parentDirectory, "@devseccode/core-launcher");
   if (parent.version !== VERSION || platform.version !== VERSION) fail("installed scanner version mismatch");
   if (launcher.version !== "0.6.0") fail("installed Core launcher version mismatch");
   const installedPlatforms = fs.readdirSync(scope).filter((name) => name.startsWith("scanner-")).sort();
@@ -210,7 +235,9 @@ function start(mode) {
 }
 
 const operation = process.argv[2];
-if (operation === "start-private") start("private");
-else if (operation === "start-registry") start("registry");
-else if (operation === "cleanup") clean();
-else fail("usage: candidate-platform-test.mjs <start-private|start-registry|cleanup>");
+if (path.resolve(process.argv[1] || "") === fileURLToPath(import.meta.url)) {
+  if (operation === "start-private") start("private");
+  else if (operation === "start-registry") start("registry");
+  else if (operation === "cleanup") clean();
+  else fail("usage: candidate-platform-test.mjs <start-private|start-registry|cleanup>");
+}
