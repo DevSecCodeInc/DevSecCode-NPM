@@ -18,8 +18,6 @@ const userConfig = path.join(root, "empty-npmrc");
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(scriptDirectory, "../..");
 const sampleProject = path.join(repositoryRoot, "resources", "sample-vulns");
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
-const npx = process.platform === "win32" ? "npx.cmd" : "npx";
 const cli = process.platform === "win32"
   ? path.join(globalRoot, "devseccode.cmd")
   : path.join(globalRoot, "bin", "devseccode");
@@ -27,6 +25,47 @@ const cli = process.platform === "win32"
 function fail(message) {
   throw new Error(message);
 }
+
+export function packageManagerInvocation(name, platform = process.platform, nodeExecutable = process.execPath) {
+  if (name !== "npm" && name !== "npx") fail(`unsupported package manager command: ${name}`);
+  if (platform !== "win32") {
+    return { display: name, executable: name, prefixArgs: [], requiredFiles: [] };
+  }
+  const script = path.win32.join(
+    path.win32.dirname(nodeExecutable),
+    "node_modules",
+    "npm",
+    "bin",
+    `${name}-cli.js`,
+  );
+  return {
+    display: `${name}.cmd`,
+    executable: nodeExecutable,
+    prefixArgs: [script],
+    requiredFiles: [script],
+  };
+}
+
+export function installedCliInvocation(
+  modules,
+  shim,
+  platform = process.platform,
+  nodeExecutable = process.execPath,
+) {
+  if (platform !== "win32") {
+    return { display: shim, executable: shim, prefixArgs: [], requiredFiles: [shim] };
+  }
+  const entry = path.win32.join(modules, "@devseccode", "scanner", "bin", "dsc.js");
+  return {
+    display: shim,
+    executable: nodeExecutable,
+    prefixArgs: [entry],
+    requiredFiles: [shim, entry],
+  };
+}
+
+const npm = packageManagerInvocation("npm");
+const npx = packageManagerInvocation("npx");
 
 function childEnvironment() {
   const environment = {
@@ -43,8 +82,15 @@ function childEnvironment() {
 }
 
 function run(command, args, options = {}) {
-  process.stdout.write(`\n> ${command} ${args.join(" ")}\n`);
-  const result = spawnSync(command, args, {
+  const invocation = typeof command === "string"
+    ? { display: command, executable: command, prefixArgs: [], requiredFiles: [] }
+    : command;
+  for (const file of invocation.requiredFiles) {
+    if (!fs.existsSync(file)) fail(`required command entry point is missing: ${file}`);
+  }
+  const childArgs = [...invocation.prefixArgs, ...args];
+  process.stdout.write(`\n> ${invocation.display} ${args.join(" ")}\n`);
+  const result = spawnSync(invocation.executable, childArgs, {
     cwd: options.cwd || root,
     env: options.inheritCredentials ? process.env : childEnvironment(),
     encoding: "utf8",
@@ -57,7 +103,7 @@ function run(command, args, options = {}) {
   }
   if (result.error) throw result.error;
   const allowed = options.allowedExitCodes || [0];
-  if (!allowed.includes(result.status)) fail(`${command} exited with status ${result.status}`);
+  if (!allowed.includes(result.status)) fail(`${invocation.display} exited with status ${result.status}`);
   return result.stdout || "";
 }
 
@@ -203,11 +249,12 @@ function verifyInstalledPackages() {
 
 function exerciseInstalledProduct() {
   verifyInstalledPackages();
-  const versionOutput = run(cli, ["--version"], { capture: true });
+  const installedCli = installedCliInvocation(globalModules(), cli);
+  const versionOutput = run(installedCli, ["--version"], { capture: true });
   if (!versionOutput.includes(`devseccode ${VERSION}`)) fail("CLI version output mismatch");
   if (!versionOutput.includes("core 0.3.6 contract v1")) fail("Core version output mismatch");
-  run(cli, ["scan", sampleProject, "--format", "terminal", "--fail-on", "critical"]);
-  run(cli, ["hunt", sampleProject, "--no-profile", "--no-explore"], { allowedExitCodes: [0, 1] });
+  run(installedCli, ["scan", sampleProject, "--format", "terminal", "--fail-on", "critical"]);
+  run(installedCli, ["hunt", sampleProject, "--no-profile", "--no-explore"], { allowedExitCodes: [0, 1] });
 }
 
 function start(mode) {
