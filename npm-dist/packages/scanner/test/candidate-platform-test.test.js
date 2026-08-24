@@ -74,6 +74,24 @@ test("candidate cleanup selects both explicitly installed packages", async () =>
   }
 });
 
+test("registry acceptance removes stale Core state between install modes", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dsc-candidate-state-reset-"));
+  const state = path.join(root, "state", "core", "endpoints");
+  fs.mkdirSync(state, { recursive: true });
+  fs.writeFileSync(path.join(state, "win32-x64.json"), JSON.stringify({ pid: 7972 }));
+  let stopped = false;
+  try {
+    const { resetIsolatedCoreState } = await import("../../../scripts/candidate-platform-test.mjs");
+    resetIsolatedCoreState(() => {
+      stopped = true;
+    }, path.join(root, "state"));
+    assert.equal(stopped, true);
+    assert.equal(fs.existsSync(path.join(root, "state")), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("Windows candidate commands bypass cmd shims without a command shell", async () => {
   const { installedCliInvocation, packageManagerInvocation } = await import(
     "../../../scripts/candidate-platform-test.mjs"

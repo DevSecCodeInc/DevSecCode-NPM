@@ -121,6 +121,11 @@ function stopCore() {
   run(process.execPath, [path.join(scriptDirectory, "stop-isolated-core.mjs"), stateRoot]);
 }
 
+export function resetIsolatedCoreState(stop = stopCore, directory = stateRoot) {
+  stop();
+  fs.rmSync(directory, { recursive: true, force: true });
+}
+
 export function installedCandidatePackages(modules, platformTarget) {
   const scope = path.join(modules, "@devseccode");
   return ["scanner", `scanner-${platformTarget}`]
@@ -339,7 +344,7 @@ function start(mode) {
     run(npm, ["install", "--global", "--omit=optional", "--no-audit", "--no-fund", ...tarballs]);
   } else {
     exerciseRegistryNpx();
-    stopCore();
+    resetIsolatedCoreState();
     installRegistryCandidate();
   }
   exerciseInstalledProduct();
