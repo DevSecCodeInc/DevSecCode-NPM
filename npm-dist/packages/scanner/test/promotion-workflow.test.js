@@ -17,6 +17,8 @@ test("promotion publishes candidate code and runs acceptance from current workfl
   const release = workflow.slice(releaseStart, acceptanceStart);
   const acceptance = workflow.slice(acceptanceStart);
   assert.match(release, /ref: \$\{\{ inputs\.npm_ref \}\}/);
+  assert.match(release, /test "\$\(git rev-parse HEAD\)" = "\$NPM_REF"/);
+  assert.doesNotMatch(release, /test "\$GITHUB_SHA" = "\$NPM_REF"/);
   assert.match(acceptance, /ref: \$\{\{ github\.sha \}\}/);
   assert.doesNotMatch(acceptance, /ref: \$\{\{ inputs\.npm_ref \}\}/);
 });

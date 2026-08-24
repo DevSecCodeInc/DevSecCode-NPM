@@ -74,7 +74,7 @@ jobs:
           CORE_REF: ${{ inputs.core_ref }}
           CORE_CANDIDATE_ID: ${{ inputs.core_candidate_id }}
         run: |
-          test "$GITHUB_SHA" = "$NPM_REF"
+          test "$(git rev-parse HEAD)" = "$NPM_REF"
           node npm-dist/scripts/npm-candidate-record.mjs \
             verify "$RUNNER_TEMP/npm-candidate" \
             "$NPM_VERSION" "$NPM_REF" \
