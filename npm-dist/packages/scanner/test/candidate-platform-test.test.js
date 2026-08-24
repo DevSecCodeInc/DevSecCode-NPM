@@ -29,13 +29,42 @@ test("candidate acceptance resolves Core Launcher through the scanner dependency
   }
 });
 
+test("candidate acceptance resolves a nested platform package through the scanner dependency tree", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dsc-candidate-platform-layout-"));
+  const scanner = path.join(root, "node_modules", "@devseccode", "scanner");
+  const platform = path.join(scanner, "node_modules", "@devseccode", "scanner-darwin-arm64");
+  fs.mkdirSync(path.join(platform, "artifacts"), { recursive: true });
+  fs.writeFileSync(path.join(scanner, "package.json"), JSON.stringify({
+    name: "@devseccode/scanner",
+    version: "0.5.0",
+  }));
+  fs.writeFileSync(path.join(platform, "package.json"), JSON.stringify({
+    name: "@devseccode/scanner-darwin-arm64",
+    version: "0.5.0",
+  }));
+  try {
+    const { dependencyPackageRecord } = await import("../../../scripts/candidate-platform-test.mjs");
+    const record = dependencyPackageRecord(scanner, "@devseccode/scanner-darwin-arm64");
+    assert.equal(fs.realpathSync(record.directory), fs.realpathSync(platform));
+    assert.equal(record.metadata.version, "0.5.0");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("candidate cleanup selects both explicitly installed packages", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dsc-candidate-cleanup-"));
   const scope = path.join(root, "@devseccode");
   fs.mkdirSync(path.join(scope, "scanner"), { recursive: true });
   fs.mkdirSync(path.join(scope, "scanner-linux-x64"), { recursive: true });
   try {
-    const { installedCandidatePackages } = await import("../../../scripts/candidate-platform-test.mjs");
+    const { installedCandidatePackages, requiredCandidatePackages } = await import(
+      "../../../scripts/candidate-platform-test.mjs"
+    );
+    assert.deepEqual(requiredCandidatePackages("linux-x64"), [
+      "@devseccode/scanner",
+      "@devseccode/scanner-linux-x64",
+    ]);
     assert.deepEqual(installedCandidatePackages(root, "linux-x64"), [
       "@devseccode/scanner",
       "@devseccode/scanner-linux-x64",

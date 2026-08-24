@@ -112,7 +112,11 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Wait for exact registry version
-        run: node npm-dist/scripts/wait-for-npm-version.mjs @devseccode/scanner "${{ inputs.npm_version }}"
+        run: >-
+          node npm-dist/scripts/wait-for-npm-version.mjs
+          @devseccode/scanner
+          "${{ inputs.npm_version }}"
+          "@devseccode/scanner-${{ matrix.target }}"
 
       - name: Exercise no-auth npx and isolated global install
         env:

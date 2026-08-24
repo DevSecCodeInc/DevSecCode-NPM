@@ -66,8 +66,9 @@ export function installedCliInvocation(
 
 const npm = packageManagerInvocation("npm");
 const npx = packageManagerInvocation("npx");
+const registryInstallAttempts = 6;
 
-function childEnvironment() {
+function childEnvironment(overrides = {}) {
   const environment = {
     ...process.env,
     DEVSECCODE_HOME: stateRoot,
@@ -76,6 +77,7 @@ function childEnvironment() {
     npm_config_prefix: globalRoot,
     npm_config_registry: "https://registry.npmjs.org",
     npm_config_userconfig: userConfig,
+    ...overrides,
   };
   for (const name of ["NODE_AUTH_TOKEN", "NPM_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) delete environment[name];
   return environment;
@@ -92,7 +94,7 @@ function run(command, args, options = {}) {
   process.stdout.write(`\n> ${invocation.display} ${args.join(" ")}\n`);
   const result = spawnSync(invocation.executable, childArgs, {
     cwd: options.cwd || root,
-    env: options.inheritCredentials ? process.env : childEnvironment(),
+    env: options.inheritCredentials ? process.env : childEnvironment(options.environment),
     encoding: "utf8",
     stdio: options.capture ? "pipe" : "inherit",
     timeout: 10 * 60 * 1000,
@@ -103,7 +105,10 @@ function run(command, args, options = {}) {
   }
   if (result.error) throw result.error;
   const allowed = options.allowedExitCodes || [0];
-  if (!allowed.includes(result.status)) fail(`${invocation.display} exited with status ${result.status}`);
+  if (!allowed.includes(result.status) && !options.allowFailure) {
+    fail(`${invocation.display} exited with status ${result.status}`);
+  }
+  if (options.returnResult) return { status: result.status, stdout: result.stdout || "" };
   return result.stdout || "";
 }
 
@@ -121,6 +126,64 @@ export function installedCandidatePackages(modules, platformTarget) {
   return ["scanner", `scanner-${platformTarget}`]
     .filter((name) => fs.existsSync(path.join(scope, name)))
     .map((name) => `@devseccode/${name}`);
+}
+
+export function requiredCandidatePackages(platformTarget) {
+  return ["@devseccode/scanner", `@devseccode/scanner-${platformTarget}`];
+}
+
+function pause(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function installRegistryCandidate() {
+  const required = requiredCandidatePackages(target);
+  for (let attempt = 1; attempt <= registryInstallAttempts; attempt += 1) {
+    fs.rmSync(globalRoot, { recursive: true, force: true });
+    run(npm, [
+      "install", "--global", "--include=optional", "--prefer-online",
+      "--no-audit", "--no-fund", PACKAGE,
+    ], {
+      environment: {
+        npm_config_cache: path.join(root, "npm-cache", String(attempt)),
+      },
+    });
+    const modules = globalModules();
+    const parentDirectory = path.join(modules, "@devseccode", "scanner");
+    const missing = [];
+    if (!fs.existsSync(parentDirectory)) missing.push(required[0]);
+    if (missing.length === 0) {
+      try {
+        dependencyPackageRecord(parentDirectory, required[1]);
+      } catch {
+        missing.push(required[1]);
+      }
+    }
+    if (missing.length === 0) return;
+    if (attempt === registryInstallAttempts) {
+      fail(`registry install omitted required packages after ${attempt} attempts: ${missing.join(", ")}`);
+    }
+    process.stdout.write(`Registry install attempt ${attempt} omitted ${missing.join(", ")}; retrying with a fresh cache.\n`);
+    pause(10000);
+  }
+}
+
+function exerciseRegistryNpx() {
+  for (let attempt = 1; attempt <= registryInstallAttempts; attempt += 1) {
+    const result = run(npx, ["--yes", "--prefer-online", PACKAGE, "--version"], {
+      allowFailure: true,
+      returnResult: true,
+      environment: {
+        npm_config_cache: path.join(root, "npx-cache", String(attempt)),
+      },
+    });
+    if (result.status === 0) return;
+    if (attempt === registryInstallAttempts) {
+      fail(`npx could not install the exact registry candidate after ${attempt} attempts`);
+    }
+    process.stdout.write(`npx registry install attempt ${attempt} failed; retrying with a fresh cache.\n`);
+    pause(10000);
+  }
 }
 
 function clean() {
@@ -214,18 +277,15 @@ function privateTarballs(candidateDirectory, sourceCommit) {
 }
 
 export function dependencyPackage(parentDirectory, dependencyName) {
+  return dependencyPackageRecord(parentDirectory, dependencyName).metadata;
+}
+
+export function dependencyPackageRecord(parentDirectory, dependencyName) {
   const resolveFromParent = createRequire(path.join(parentDirectory, "package.json"));
-  let directory = path.dirname(resolveFromParent.resolve(dependencyName));
-  while (true) {
-    const packageFile = path.join(directory, "package.json");
-    if (fs.existsSync(packageFile)) {
-      const metadata = JSON.parse(fs.readFileSync(packageFile, "utf8"));
-      if (metadata.name === dependencyName) return metadata;
-    }
-    const parent = path.dirname(directory);
-    if (parent === directory) fail(`could not locate installed package metadata for ${dependencyName}`);
-    directory = parent;
-  }
+  const packageFile = resolveFromParent.resolve(`${dependencyName}/package.json`);
+  const metadata = JSON.parse(fs.readFileSync(packageFile, "utf8"));
+  if (metadata.name !== dependencyName) fail(`installed package metadata mismatch for ${dependencyName}`);
+  return { directory: path.dirname(packageFile), metadata };
 }
 
 function verifyInstalledPackages() {
@@ -233,15 +293,23 @@ function verifyInstalledPackages() {
   const scope = path.join(modules, "@devseccode");
   const parentDirectory = path.join(scope, "scanner");
   const parent = JSON.parse(fs.readFileSync(path.join(parentDirectory, "package.json"), "utf8"));
-  const platform = JSON.parse(fs.readFileSync(path.join(scope, `scanner-${target}`, "package.json"), "utf8"));
+  const platformRecord = dependencyPackageRecord(parentDirectory, `@devseccode/scanner-${target}`);
+  const platform = platformRecord.metadata;
   const launcher = dependencyPackage(parentDirectory, "@devseccode/core-launcher");
   if (parent.version !== VERSION || platform.version !== VERSION) fail("installed scanner version mismatch");
   if (launcher.version !== "0.6.0") fail("installed Core launcher version mismatch");
-  const installedPlatforms = fs.readdirSync(scope).filter((name) => name.startsWith("scanner-")).sort();
-  if (installedPlatforms.length !== 1 || installedPlatforms[0] !== `scanner-${target}`) {
+  const installedPlatforms = [...TARGETS].filter((platformTarget) => {
+    try {
+      dependencyPackageRecord(parentDirectory, `@devseccode/scanner-${platformTarget}`);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  if (installedPlatforms.length !== 1 || installedPlatforms[0] !== target) {
     fail(`unexpected platform package selection: ${installedPlatforms.join(", ")}`);
   }
-  const artifactFiles = fs.readdirSync(path.join(scope, `scanner-${target}`, "artifacts"));
+  const artifactFiles = fs.readdirSync(path.join(platformRecord.directory, "artifacts"));
   if (!artifactFiles.includes("devseccode-core-artifacts.json")) fail("Core manifest missing from platform package");
   if (!artifactFiles.includes("devseccode-core-artifacts.json.sig")) fail("Core signature missing from platform package");
   if (artifactFiles.filter((name) => name.endsWith(".tar.gz")).length !== 1) fail("Core archive matrix mismatch");
@@ -270,9 +338,9 @@ function start(mode) {
     const tarballs = privateTarballs(path.resolve(candidateDirectory), sourceCommit);
     run(npm, ["install", "--global", "--omit=optional", "--no-audit", "--no-fund", ...tarballs]);
   } else {
-    run(npx, ["--yes", PACKAGE, "--version"]);
+    exerciseRegistryNpx();
     stopCore();
-    run(npm, ["install", "--global", "--no-audit", "--no-fund", PACKAGE]);
+    installRegistryCandidate();
   }
   exerciseInstalledProduct();
   process.stdout.write(`\nCandidate ${VERSION} passed isolated ${target} ${mode} acceptance.\n`);
