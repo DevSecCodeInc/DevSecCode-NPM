@@ -2,6 +2,8 @@
 
 Release operators start with
 [`docs/npm-artifact-v2-release-runbook.md`](../docs/npm-artifact-v2-release-runbook.md).
+The first production artifact-v2 release is recorded in
+[`docs/npm-artifact-v2-release-closure.md`](../docs/npm-artifact-v2-release-closure.md).
 
 This directory holds the npm side of the public DevSecCode CLI. Users install
 one package (`@devseccode/scanner`), run `devseccode hunt .`, and npm
@@ -52,8 +54,8 @@ inspectable, the Core public-starter profile—not compilation—is the IP bound
 
 NPM's migration target is Core's
 [`artifact-v2 downstream product contract`](https://github.com/DevSecCodeInc/DevSecCode-Core/blob/main/docs/distribution/artifact-v2-downstream-contract.md).
-The `0.5.0` candidate implementation uses this contract. Production remains on
-`0.4.5` until the candidate and four-platform registry acceptance gates pass.
+Version `0.5.0` is the first production release using this contract. It passed
+the four-platform registry acceptance gates and is published at `latest`.
 
 NPM consumes only a signed `devseccode-core-artifacts/v2` `public-starter`
 matrix through `@devseccode/core-launcher` and the shared validator. Each
