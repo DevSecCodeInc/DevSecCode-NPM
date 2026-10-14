@@ -1,6 +1,6 @@
 # Agent instructions
 
-Sprints: current sprints are in the shared DevSecCode workspace sprint set (dsc/docs/sprints/), not in this repository. Use the sprints skill there: check the open sprint before starting work and update it as tasks finish.
+Sprints: history in docs/sprints/ (see its README); current sprints are in the shared DevSecCode workspace sprint set (dsc/docs/sprints/), not in this repository. Use the sprints skill there: check the open sprint before starting work and update it as tasks finish.
 
 NPM is deliberately limited to the Core-produced `public-starter` artifact.
 Follow `docs/DevSecCode-NPM Core Migration Plan.md` and the applicable refresh

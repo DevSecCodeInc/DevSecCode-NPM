@@ -1,5 +1,13 @@
 # Documentation assets
 
+## Planning and releases
+
+- [NPM sprint history](sprints/README.md); current sprints are in the shared DevSecCode workspace sprint set (dsc/docs/sprints/), not in this repository.
+- [Public/starter refresh spec](specs/npm-public-starter-refresh.md)
+- [Core migration plan](DevSecCode-NPM%20Core%20Migration%20Plan.md)
+- [Artifact-v2 release runbook](npm-artifact-v2-release-runbook.md)
+- [NPM 0.5.0 release closure](npm-artifact-v2-release-closure.md)
+
 Assets referenced from the top-level README live here.
 
 ## Required: `demo.gif`
