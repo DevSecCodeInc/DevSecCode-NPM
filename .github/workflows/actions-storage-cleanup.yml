@@ -1,0 +1,39 @@
+name: Actions Storage Cleanup
+
+on:
+  schedule:
+    # GitHub can leave expired artifacts in storage for a while; clear them daily.
+    - cron: '17 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  delete-expired-artifacts:
+    name: Delete expired artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete expired Actions artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t artifact_ids < <(
+            gh api "repos/${GH_REPO}/actions/artifacts?per_page=100" \
+              --paginate \
+              --jq '.artifacts[] | select(.expired == true) | .id'
+          )
+
+          if [ "${#artifact_ids[@]}" -eq 0 ]; then
+            echo "No expired artifacts to delete."
+            exit 0
+          fi
+
+          for artifact_id in "${artifact_ids[@]}"; do
+            echo "Deleting expired artifact ${artifact_id}"
+            gh api --method DELETE "repos/${GH_REPO}/actions/artifacts/${artifact_id}"
+          done
