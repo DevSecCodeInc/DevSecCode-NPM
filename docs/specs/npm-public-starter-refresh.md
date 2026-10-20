@@ -158,3 +158,90 @@ their applicable explicit authorization.
 
 Maintain implementation commit identities and acceptance results here as work
 finishes. Planning evidence above does not mark any workstream complete.
+
+### NPM-R1: Qualified Core input (2026-10-20)
+
+Accepted input, pending one review item below: Core `0.3.11`, profile
+`public-starter`, from the `core-v0.3.11` GitHub Release.
+
+| Field | Value |
+| --- | --- |
+| Source commit | `dc0faca57cd2e5932f520175f7a697fb23e8ddf2` |
+| Candidate ID | `dc0faca57cd2e5932f520175f7a697fb23e8ddf2-run-39362422025-attempt-1` |
+| Validation / publication runs | `39362422025/1` / `39364039471/1`; ledger `nextSafeAction` `none` |
+| Release path | `candidates/v2/<candidate ID>/core/v0.3.11/public-starter` on the public R2 base |
+| Manifest SHA-256 | `6ed8b910fa3a3796f58ff9b36f4cb3a1b91b91589241ee72dab1e60e21b98db5` |
+| Manifest signature SHA-256 | `46568e5f001ed9832c0dde8207373c8e19c41e7236daac542be4528287c7e863` |
+| Publication record / signature SHA-256 | `2993c24d038d91bd553c653026d4c659e5408f393c7d500b47f930af590571b8` / `a560fc6d8ac27b360c76f0334148864ccebd789cd48c9cc6659c11bbcfceafba` |
+| Trust identity | Ed25519 `ed25519:a96597f65ec59252`; trust bundle SHA-256 `1ac1bf4a95a31a8179af06bc81e1a6ee2e7a0d8b50efcca7ad15ba1940620f33`; NPM's pinned PEM is unchanged and identical to Core's |
+| Required launcher | `@devseccode/core-launcher@0.6.0`, `sha512-AupfY9wSRSJqC8zR4/6r77vP3cLBqTARfVcNYJUMy8lEM4OuYio7lubHxnw36ZHse3eaXc2c46KS9EUBXjAD2w==`; source identical to `launchers/node` at the tag, so the pin does not change |
+| API contract | `v1` |
+
+| Target | Archive SHA-256 | Bytes | `dsc-backend` SHA-256 |
+| --- | --- | --- | --- |
+| `darwin-arm64` | `922e0a3549b650bc99cfa830aea90b49fc9c2d9792c36efa073535a9ebdf029a` | 61457165 | `bc454472c38c2648e04822a2fcedde696664bb0ad1c207106e6400bed0f1348a` |
+| `linux-arm64` | `6789c00821609c570debe4d3117a8ea0f118f89d953b660e5775a0ccf70d0b7d` | 82257030 | `f8e3791e2feae96077498006a933f8d993281c2b16bea6cd45673d490e00b484` |
+| `linux-x64` | `fece85d17f9d9af99aa773ddb9d927f4e133a4025442067dd6c297c1a423fdfc` | 81309156 | `435772efe8775441664da0effd441c30b9f42bd1faf447bf372178166dc443b7` |
+| `win32-x64` | `926535f6f33da8d0a8cb75c86ef42fa9a12b10edd575a7fc2de49a5dce10016a` | 64722566 | `386c8b44d98e05d1af934a623c97f5d0534fdabd34b4fe3740137db74cabce6d` |
+
+All five required commits (`e303a74`, `983d1d7`, `f07fa67`, `e4cb2f9`,
+`70cb7c3`) are ancestors of the source commit. Core's release gates passed:
+every publication, download and qualification stage (all four public-starter
+lanes) succeeded, and the tag resolves to the source commit.
+
+Verification, all fail-closed:
+
+- All 27 public-starter files match the Release `SHA256SUMS`.
+- Core's own consumer (`fetch-and-smoke-published-artifact.mjs` at the tag)
+  verified the manifest and publication signatures and every referenced byte
+  for each of the four targets, then passed its runtime smoke on
+  `darwin-arm64`.
+- NPM's `download-public-core-candidate.mjs` and
+  `validate-public-core-artifact.js` accept all four targets. Flipping one
+  manifest byte or one archive byte is rejected.
+
+Inventory: Core's `validate-backend-artifact.py` (PyInstaller 6.21.0) passes
+for all four archives. Each embeds exactly the 33 first-party modules on the
+public-starter allowlist and no banned prefix. The only allowlist change since
+0.3.6 is `dsc_backend.scan_baseline`, from `70cb7c3`. Archives hold 143–167
+members and no banned paths.
+
+Rule set: the 11 curated rule files and 131 public rule IDs are unchanged from
+Core 0.3.6, comparing the shipped archives. One rule's content changed:
+`e303a74` widened the generic CWE-798 secret-assignment regex in
+`cwe/cwe-798-hardcoded-secrets.yml` to also match JavaScript
+`export`/`const`/`let`/`var` declarations. **Open:** this public rule change
+needs Matt's explicit review before R1 is accepted.
+
+Runtime demonstrations: `npm-dist/scripts/qualify-core-input.mjs` downloads and
+verifies the candidate, extracts the host target and runs the real starter
+runtime against generated fixtures. A scanner stub selected through
+`DSC_OPENGREP_BINARY` simulates crashes; the Core bytes are unchanged.
+
+| Check | Result |
+| --- | --- |
+| Scope isolation | A single-file target reports only that file. A workspace scan honors an ignore pattern and never scans `.dsc_cache`, with and without the cache |
+| Cache invalidation | Unchanged rescan: 2 hits, 0 misses, same findings. After swapping a vulnerable file and a clean one: 2 misses, and the findings move to the newly vulnerable file, matching a no-cache scan |
+| Portable SARIF | URIs are relative to `SRCROOT` and percent-encoded (`src/web%20app%20%231.py`). The workspace path appears only in `originalUriBaseIds`. Two checkouts in different locations export identical locations |
+| Crash rejection | Empty output (exit 0, or exit 2 with a fatal error), `{}` and `null` each yield an `opengrep failed` error and no findings. A valid empty report still succeeds cleanly |
+
+These passed on `darwin-arm64` (native macOS 25.6, Node 24.18), `linux-arm64`
+(container) and `linux-x64` (emulated container). `win32-x64` was not run here
+because the crash stub is POSIX-only; Core's Windows 11 qualification lane
+covers its install and smoke.
+
+What this means for later workstreams: Core reports a crash as
+`status: complete` with a non-empty `errors` array. NPM 0.5.0 treats any
+`complete` status as success, so R2 must fail on these errors.
+
+To rerun:
+
+```bash
+node npm-dist/scripts/qualify-core-input.mjs "$(mktemp -d)" 0.3.11 \
+  dc0faca57cd2e5932f520175f7a697fb23e8ddf2 \
+  dc0faca57cd2e5932f520175f7a697fb23e8ddf2-run-39362422025-attempt-1 evidence.json
+```
+
+The script needs the launcher installed as in CI (`npm install --prefix
+npm-dist/packages/scanner ... --omit=optional`). It exits non-zero on any
+failure, including a wrong identity.
