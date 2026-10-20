@@ -11,3 +11,12 @@ Never push commits, branches, tags, or refs without Matt's explicit authorizatio
 for that specific push in the current conversation. Planning a release does not
 authorize publishing or starting external jobs. After an authorized external job
 starts, report its identifier and stop unless monitoring was separately requested.
+
+## Commit attribution
+
+- Do not add AI authorship attribution to commits or pull requests. Omit
+  `Co-authored-by` trailers for Claude, Codex, Copilot, Cursor or other AI
+  tools, and omit footers such as "Generated with Claude Code". Keep human
+  coauthors.
+
+`scripts/check-ai-attribution.sh` enforces this in CI (the `AI attribution` workflow) and in a local `commit-msg` hook. Enable the hook once per clone with `git config core.hooksPath .githooks`. Cursor and Copilot add attribution through per-user settings, so turn it off there too.
