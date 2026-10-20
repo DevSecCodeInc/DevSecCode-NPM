@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   check:
+    name: AI attribution
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
