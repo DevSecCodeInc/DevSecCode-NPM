@@ -161,7 +161,7 @@ finishes. Planning evidence above does not mark any workstream complete.
 
 ### NPM-R1: Qualified Core input (2026-10-20)
 
-Accepted input, pending one review item below: Core `0.3.11`, profile
+Accepted input: Core `0.3.11`, profile
 `public-starter`, from the `core-v0.3.11` GitHub Release.
 
 | Field | Value |
@@ -210,8 +210,11 @@ Rule set: the 11 curated rule files and 131 public rule IDs are unchanged from
 Core 0.3.6, comparing the shipped archives. One rule's content changed:
 `e303a74` widened the generic CWE-798 secret-assignment regex in
 `cwe/cwe-798-hardcoded-secrets.yml` to also match JavaScript
-`export`/`const`/`let`/`var` declarations. **Open:** this public rule change
-needs Matt's explicit review before R1 is accepted.
+`export`/`const`/`let`/`var` declarations. Matt accepted this change on
+2026-10-20 after checking that it exposes nothing new. The public-starter archive
+has shipped these rule files since 0.3.6. The change adds no rule, only widens one
+that was already public, and the pattern is a generic secret-name match of the
+kind open-source secret scanners already publish.
 
 Runtime demonstrations: `npm-dist/scripts/qualify-core-input.mjs` downloads and
 verifies the candidate, extracts the host target and runs the real starter
