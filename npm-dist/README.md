@@ -73,6 +73,8 @@ promotion. Scanner evidence comes from public-starter Core through `/v1`.
 
 ## Reproducing the candidate locally
 
+The script downloads Core's permanent release copy under `releases/v2/`. That copy exists for Core 0.3.11 and later, and it must name the given candidate ID.
+
 ```bash
 CORE_ARTIFACT_DIR="$(mktemp -d)"
 printf 'Accepted hardened Core source commit: '
@@ -81,7 +83,7 @@ printf 'Accepted hardened Core candidate ID: '
 IFS= read -r CORE_CANDIDATE_ID
 node npm-dist/scripts/download-public-core-candidate.mjs \
   "$CORE_ARTIFACT_DIR" \
-  0.3.6 \
+  0.3.11 \
   "$CORE_REF" \
   "$CORE_CANDIDATE_ID"
 DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \

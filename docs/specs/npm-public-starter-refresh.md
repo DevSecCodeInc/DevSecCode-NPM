@@ -169,7 +169,7 @@ Accepted input: Core `0.3.11`, profile
 | Source commit | `dc0faca57cd2e5932f520175f7a697fb23e8ddf2` |
 | Candidate ID | `dc0faca57cd2e5932f520175f7a697fb23e8ddf2-run-39362422025-attempt-1` |
 | Validation / publication runs | `39362422025/1` / `39364039471/1`; ledger `nextSafeAction` `none` |
-| Release path | `candidates/v2/<candidate ID>/core/v0.3.11/public-starter` on the public R2 base |
+| Release path | `releases/v2/core/v0.3.11/public-starter` on the public R2 base, Core's permanent copy (promoted 2026-10-24). The manifest still names candidate `<candidate ID>` as provenance. |
 | Manifest SHA-256 | `6ed8b910fa3a3796f58ff9b36f4cb3a1b91b91589241ee72dab1e60e21b98db5` |
 | Manifest signature SHA-256 | `46568e5f001ed9832c0dde8207373c8e19c41e7236daac542be4528287c7e863` |
 | Publication record / signature SHA-256 | `2993c24d038d91bd553c653026d4c659e5408f393c7d500b47f930af590571b8` / `a560fc6d8ac27b360c76f0334148864ccebd789cd48c9cc6659c11bbcfceafba` |

@@ -68,9 +68,12 @@ if (!new RegExp(`^${coreSourceCommit}-run-[1-9][0-9]*-attempt-[1-9][0-9]*$`).tes
 }
 
 fs.mkdirSync(outputDirectory, { recursive: true });
+// Core keeps each release permanently under releases/v2/; candidates/v2/
+// expires after 90 days. The signed manifest still names its source candidate
+// as provenance, so candidateBaseUrl is checked below but not downloaded from.
 const candidateBaseUrl = `${PUBLIC_R2_BASE_URL}/candidates/v2/${candidateId}`;
 const releasePath = `core/v${coreVersion}/public-starter`;
-const artifactBaseUrl = `${candidateBaseUrl}/${releasePath}`;
+const artifactBaseUrl = `${PUBLIC_R2_BASE_URL}/releases/v2/${releasePath}`;
 const manifestPath = path.join(outputDirectory, "devseccode-core-artifacts.json");
 await download(`${artifactBaseUrl}/devseccode-core-artifacts.json`, manifestPath, MAX_MANIFEST_BYTES);
 await download(`${artifactBaseUrl}/devseccode-core-artifacts.json.sig`, `${manifestPath}.sig`, MAX_SIGNATURE_BYTES);
