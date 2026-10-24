@@ -28,7 +28,7 @@ printf 'Accepted hardened Core candidate ID: '
 IFS= read -r CORE_CANDIDATE_ID
 node npm-dist/scripts/download-public-core-candidate.mjs \
   "$CORE_ARTIFACT_DIR" \
-  0.3.6 \
+  0.3.11 \
   "$CORE_REF" \
   "$CORE_CANDIDATE_ID"
 DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
@@ -66,7 +66,7 @@ printf 'Accepted hardened Core candidate ID: '
 IFS= read -r CORE_CANDIDATE_ID
 node npm-dist/scripts/download-public-core-candidate.mjs \
   "$CORE_ARTIFACT_DIR" \
-  0.3.6 \
+  0.3.11 \
   "$CORE_REF" \
   "$CORE_CANDIDATE_ID"
 DSC_CORE_ARTIFACT_DIR="$CORE_ARTIFACT_DIR" \
