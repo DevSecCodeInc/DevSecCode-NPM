@@ -20,4 +20,4 @@ starts, report its identifier and stop unless monitoring was separately requeste
   tools, and omit footers such as "Generated with Claude Code". Keep human
   coauthors.
 
-`scripts/check-ai-attribution.sh` enforces this in CI (the `AI attribution` workflow) and in a local `commit-msg` hook. Enable the hook once per clone with `git config core.hooksPath .githooks`. Cursor and Copilot add attribution through per-user settings, so turn it off there too.
+`scripts/check-ai-attribution.sh` enforces this in a local `commit-msg` hook; also run it on a PR description before opening the PR (`printf '%s\n' "$BODY" | scripts/check-ai-attribution.sh`), since no CI workflow checks it. Enable the hook once per clone with `git config core.hooksPath .githooks`. Cursor and Copilot add attribution through per-user settings, so turn it off there too.
