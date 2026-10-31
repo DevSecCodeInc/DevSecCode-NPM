@@ -1,8 +1,7 @@
 name: NPM CI
 
+# Runs only when dispatched: PRs are checked locally, and paid CI runs at release.
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
